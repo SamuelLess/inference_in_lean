@@ -1,7 +1,7 @@
 import Mathlib.Data.Set.Basic
 
 set_option autoImplicit false
-
+--set_option diagnostics true
 
 /-
 ### 3.1 Syntax
@@ -14,70 +14,89 @@ set_option autoImplicit false
 
 def Symbol := String deriving Repr, DecidableEq
 
--- TODO: think about adding arity to Function and Predicate
 structure SyntFunction where
     symb : Symbol
+    arity : ℕ
 deriving Repr, DecidableEq
 
---def Constant := {c : Function // c.arity == 0}
---def a_is_constant : Constant := ⟨a, rfl⟩
+def Constant := {c : SyntFunction // c.arity == 0}
 
-def b := SyntFunction.mk "b"
-def g := SyntFunction.mk "g"
+@[simp]
+def b : SyntFunction := .mk "b" 0
+def b_is_constant : Constant := ⟨b, rfl⟩
+@[simp]
+def g : SyntFunction := .mk "g" 1
 
-structure Predicate where
+structure SyntPredicate where
     symb : Symbol
+    arity: ℕ
 
---def Proposition := {p : Predicate // p.arity == 0}
+def Proposition := {p : SyntPredicate // p.arity == 0}
 
-def P := Predicate.mk "P"
+def P := SyntPredicate.mk "P" 1
 
 structure Signature where
     func : List SyntFunction
-    pred : List Predicate
+    pred : List SyntPredicate
 
+@[simp]
 def example_signature : Signature := ⟨[b, g], [P]⟩
-
 
 /-
 --TODO: Find out whether allowing finite variable lists is a problem
 Instead this could use a Set and then (h: x ∈ X) is added to the variable constructor in the terms.
 -/
 def Variables := Type
-def Variable : Variables := String deriving Repr, DecidableEq
+def Variable : Variables := String deriving Repr, DecidableEq, BEq
 
 
 inductive Term {sig : Signature} {X : Variables} where
     | var (x: X)
     | func (f: SyntFunction) (args: List (@Term sig X))
-           (h : f ∈ sig.func) -- (h': args.length = 5) -- this would be perfect
+           (h : f ∈ sig.func) -- (h': args.length = f.arity) -- this would be perfect
 
 /-
 See `LoVe06_InductivePredicates`
 -/
-inductive HasValidArity {sig : Signature} {X : Variables} : @Term sig X -> Prop
+inductive HasValidArity {sig : Signature} {X : Variables} [BEq X] : @Term sig X -> Prop
     | var : HasValidArity (@Term.var sig X _)
     | func {args : List Term}
            {func : SyntFunction}
-           --(h_arity: func.arity == args.length)
-           (h: func ∈ sig.func)
-           (h': ∀t ∈ args, HasValidArity t) : HasValidArity (@Term.func sig X func args h)
+           (h_in: func ∈ sig.func)
+           (h_arity: func.arity == args.length)
+           (h': ∀t ∈ args, HasValidArity t) : HasValidArity (@Term.func sig X func args h_in)
+
+def ValidTerm {sig : Signature} {X : Variables} [BEq X] := {t : @Term sig X // HasValidArity t}
 
 
-def ValidTerm {sig : Signature} {X : Variables} := {t : @Term sig X // HasValidArity t}
+def ex_valid_term : @ValidTerm example_signature Variable _ :=
+    ⟨Term.func b [] (by simp), HasValidArity.func (by simp) (by simp) (by simp)⟩
 
--- TODO: how can we leave out the X?
+/-
+> g(b)
+-/
+def ex_valid_term' : @ValidTerm example_signature Variable _ :=
+    ⟨Term.func g [ex_valid_term.val] (by simp),
+        HasValidArity.func (by simp) (by simp)
+            (by simp; exact ex_valid_term.prop)⟩
+-- this is so tedieous...
+
+def ex_valid_term'' : @ValidTerm example_signature Variable _:=
+    ⟨Term.var "x", HasValidArity.var⟩
+
 inductive IsGround {sig : Signature} {X : Variables}: Term -> Prop
     | func {args : List Term}
-            (h: ∀t ∈ args, IsGround t): IsGround (@Term.func sig X _ args _)
+           (h: ∀t ∈ args, IsGround t): IsGround (@Term.func sig X _ args _)
 
 /-
 By T_Σ we denote the set of Σ-ground terms.
+TODO: how can we leave out the X?
 -/
-def GroundTerm {sig : Signature} {X: Variables} := {t : @Term sig X // HasValidArity t ∧ IsGround t}
+def GroundTerm {sig : Signature} {X: Variables} [BEq X] := {t : @Term sig X // HasValidArity t ∧ IsGround t}
 
+-- TODO: build all of this up with the `ValidTerm`
 inductive Atom {sig: Signature} {X : Variables} where
-    | pred (p: Predicate) (args: List (@Term sig X)) (h: p ∈ sig.pred)
+    | pred (p: SyntPredicate) (args: List (@Term sig X)) (h_in: p ∈ sig.pred)
     | eq (lhs rhs: @Term sig X)
 
 inductive Literal {sig: Signature} {X: Variables} where
@@ -95,19 +114,18 @@ inductive Formula {sig: Signature} {X: Variables} where
     | or (f g: @Formula sig X)
     | imp (f g: @Formula sig X)
     | iff (f g: @Formula sig X)
-    | all (x: Variable) (f: @Formula sig X)
-    | ex (x: Variable) (f: @Formula sig X)
+    | all (x: X) (f: @Formula sig X)
+    | ex (x: X) (f: @Formula sig X)
 
 /-
 ### Example Peano Arithmetic
-Arity still missing...
 -/
-def zero : SyntFunction := SyntFunction.mk "0" --0
-def s : SyntFunction := SyntFunction.mk "s" --1
-def plus : SyntFunction := SyntFunction.mk "+" --2
-def times : SyntFunction := SyntFunction.mk "*" --2
+def zero : SyntFunction := SyntFunction.mk "0" 0
+def s : SyntFunction := SyntFunction.mk "s" 1
+def plus : SyntFunction := SyntFunction.mk "+" 2
+def times : SyntFunction := SyntFunction.mk "*" 2
 
-def less_than : Predicate := Predicate.mk "<" --2
+def less_than : SyntPredicate := SyntPredicate.mk "<" 2
 
 @[simp]
 def ex_sig_peano : Signature := ⟨[zero, s, plus, times], [less_than]⟩
@@ -142,8 +160,7 @@ structure FuncInter
     interpreted : List univ → univ
 
 structure PredInter
-    (sig: Signature) (univ : Universes) where
-    p : Predicate
+    (sig: Signature) (univ : Universes) (p : SyntPredicate) where
     h_in : p ∈ sig.pred
     interpreted : List univ → Prop
 /-
@@ -153,20 +170,27 @@ Again this missses to check the arity of the functions and predicates.
 structure Interpretation (sig: Signature) where
     univ : Universes -- specific universe for the interpretation
     functions : ∀ f ∈ sig.func, FuncInter sig univ f
-    predicates : ∀ p ∈ sig.pred, PredInter sig univ
+    predicates : ∀ p ∈ sig.pred, PredInter sig univ p
 
 
 def ex_interpret_peano : Interpretation ex_sig_peano :=
     {
       univ := Nat
       functions := λ f h => match f.symb with
-        | "0" => ⟨h, λ _ => 0⟩
+        | "0" => ⟨h, λ _ => f.arity⟩
         | "s" => ⟨h, λ x => x[0]! + 1⟩ -- TODO: figure out how to use the arity
-        | "+" => ⟨h, λ args => args[0]! + args[1]!⟩
+        | "+" => ⟨h, λ args  => args[0]! + args[1]!⟩
         | "*" => ⟨h, λ args => args[0]! * args[1]!⟩
         | _ => ⟨h, λ _ => 0⟩, -- make it total but dont use it
-      predicates := λ p h => ⟨p, h, λ _ => True⟩
+      predicates := λ p h => match p.symb with
+        | "<" => ⟨h, λ args => args[0]! < args[1]!⟩
+        | _ => ⟨h, λ _ => false⟩ -- make it total but dont use it
     }
+
+
+def add_one_list : List ℕ -> ℕ
+    | [] => 1
+    | x :: xs => x + add_one_list xs
 
 /-
 ### Assigments
@@ -174,6 +198,10 @@ def ex_interpret_peano : Interpretation ex_sig_peano :=
 -/
 
 def Assignment (X: Variables) (univ: Universes) := X → univ
+
+def Assignment.update {X: Variables} {univ: Universes} [BEq X]
+                      (β: Assignment X univ) (x: X) (a: univ) : Assignment X univ :=
+    λ y => if y == x then a else β y
 
 def ex_assig_peano : Assignment Variable Nat
     | "x" => 21 -- this is kind of a shortcut for `s ... s zero`
@@ -185,7 +213,8 @@ def evalTerm {sig: Signature} {X: Variables}
     | Term.var x => β x
     | Term.func f args h => (I.functions f h).interpreted (args.map (evalTerm I β))
 
-#eval! @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano (Term.var "x")
+
+#eval! @evalTerm ex_sig_peano Variable ex_interpret_peano ex_assig_peano (Term.var "y")
 
 def ex_term_peano : @Term ex_sig_peano Variable :=
     Term.func plus [Term.var "x", Term.var "y"] (by simp)
@@ -198,23 +227,108 @@ def evalAtom {sig: Signature} {X: Variables}
     | Atom.eq lhs rhs => evalTerm I β lhs = evalTerm I β rhs
 
 
+@[simp]
+def evalFormula {sig: Signature} {X: Variables} [BEq X]
+                (I: Interpretation sig) (β: Assignment X I.univ) : @Formula sig X -> Prop
+    | Formula.falsum => False
+    | Formula.verum => True
+    | Formula.atom a => evalAtom I β a
+    | Formula.neg f => ¬ evalFormula I β f
+    | Formula.and f g => evalFormula I β f ∧ evalFormula I β g
+    | Formula.or f g => evalFormula I β f ∨ evalFormula I β g
+    | Formula.imp f g => evalFormula I β f → evalFormula I β g
+    | Formula.iff f g => evalFormula I β f ↔ evalFormula I β g
+    | Formula.all x f => ∀ a : I.univ, evalFormula I (β.update x a) f
+    | Formula.ex x f => ∃ a : I.univ, evalFormula I (β.update x a) f
+
+/-
+TODO: One of the examples from the script
+-/
+
+
 /-
 ## 3.3 Models, Validity, and Satisfiability
 
 ### Σ-Algebra A with assignment β
-> A, β ⊨ F :⇔ A(β)(F) = 1
+> I, β ⊨ F :⇔ I(β)(F) = True
+-/
 
-### Validity
+@[simp]
+def EntailsInterpret {sig : Signature} {X: Variables} [BEq X]
+            (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) : Prop :=
+    evalFormula I β F
+
+-- TODO: figure out why this does not work `Decidable`?
+#eval! @evalFormula ex_sig_peano Variable _ ex_interpret_peano ex_assig_peano example_formula_peano
+
+example : @EntailsInterpret ex_sig_peano Variable _ ex_interpret_peano
+            ex_assig_peano example_formula_peano := by
+                simp [ex_sig_peano, ex_interpret_peano, ex_assig_peano, example_formula_peano]
+                intro univ
+                --simp [evalAtom]
+                intro a
+                intro c
+                sorry
+                sorry
+
+
+theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
+            (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) :
+            EntailsInterpret I β F → ¬EntailsInterpret I β (Formula.neg F) := by
+              exact fun a a_1 ↦ a_1 a
+
+/-
+### Validity / Tautology
 > ⊨ F :⇔ A |= F for all A ∈ Σ-Alg
+-/
 
+def Valid {sig : Signature} {X: Variables} [BEq X] (F : @Formula sig X) : Prop :=
+    ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+        evalFormula I β F
+
+/-
 ### Entailment
 F ⊨ G, if for all A ∈ Σ-Alg and β ∈ X → UA, we have A, β |= F ⇒ A, β |= G
+-/
+def Entails {sig : Signature} {X: Variables} [BEq X]
+             (F G : @Formula sig X) : Prop :=
+    ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+        EntailsInterpret I β F → EntailsInterpret I β G
 
+
+/-
 ### Equivalence
 
 ##### Proposition 3.3.1
 > F ⊨ G if and only if F → G is valid`
+-/
+theorem entails_iff_imp_valid
+    {sig : Signature} {X : Variables} [inst : BEq X] (F G : Formula) :
+    Entails F G ↔ @Valid sig X inst (Formula.imp F G) := Eq.to_iff rfl
 
-##### Proposition 3.3.2
-> F ⊨ G if and only if F ↔ G is valid.`
+/-
+Proposition 3.3.3 Let F and G be formulas, let N be a set of formulas. Then
+(i) F is valid if and only if ¬F is unsatisfiable.
+(ii) F |= G if and only if F ∧ ¬G is unsatisfiable.
+(iii) N |= G if and only if N ∪ {¬G} is unsatisfiable.
+-/
+
+/-
+### Sat
+-/
+def Satisfiable {sig : Signature} {X: Variables} [BEq X]
+                (F : @Formula sig X) : Prop :=
+    ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
+        EntailsInterpret I β F
+
+theorem valid_iff_not_not_valid
+    {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula) :
+    Valid F ↔ ¬@Satisfiable sig X inst (Formula.neg F) := by simp [Valid, Satisfiable]
+
+
+
+/-
+Further stuff:
+- Compactness
+
 -/
