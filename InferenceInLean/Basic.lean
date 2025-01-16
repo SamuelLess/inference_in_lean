@@ -61,12 +61,14 @@ inductive PeanoFuns where
 inductive PeanoPreds where
     | less_than
 
+@[simp]
 def ex_sig_peano : Signature := ⟨PeanoFuns, PeanoPreds⟩
 
 /-
 > ∀x, y ((x < y ∨ x ≈ y) ↔ ∃z (x + z ≈ y))
 -/
-def example_formula_peano : @Formula ex_sig_peano String :=
+@[simp]
+def ex_formula_peano : @Formula ex_sig_peano String :=
     .all "x" (.all "y" (.iff
         (.or
             (.atom (.pred .less_than [.var "x", .var "y"]))
@@ -76,6 +78,25 @@ def example_formula_peano : @Formula ex_sig_peano String :=
             (.atom (.eq (.func .add [.var "x", .var "z"]) (.var "y")))
         )
     ))
+
+
+def Substitution (sig : Signature) (X : Variables) := X → Term sig X
+
+def Substitution.modify (sig : Signature) (X : Variables) [BEq X] :=
+    λ (σ: Substitution sig X) (x: X) (a: Term sig X) (y: X) =>
+        if y == x then a else σ y
+
+mutual
+    @[simp]
+    def substituteTerm {sig : Signature} {X: Variables}
+                    (σ: Substitution sig X) : @Term sig X -> Term sig X
+        | Term.var x => σ x
+        | Term.func f args => Term.func f $ substitute_args σ args
+    def substitute_args {sig : Signature} {X: Variables}
+                    (σ: Substitution sig X) : List (@Term sig X) -> List (@Term sig X)
+        | [] => []
+        | x :: xs => substituteTerm σ x :: substitute_args σ xs
+end
 
 
 /-
@@ -95,6 +116,7 @@ structure Interpretation (sig: Signature) where
     functions : sig.funs -> (List univ -> univ)
     predicates : sig.preds -> (List univ -> Prop)
 
+@[simp]
 def ex_interpret_peano : Interpretation ex_sig_peano :=
     {
       univ := ℕ
@@ -112,9 +134,11 @@ def ex_interpret_peano : Interpretation ex_sig_peano :=
 > β : X → univ
 -/
 
+@[simp]
 def Assignment (X: Variables) (univ: Universes) := X → univ
 
-def Assignment.update {X: Variables} {univ: Universes} [BEq X]
+@[simp]
+def Assignment.modify {X: Variables} {univ: Universes} [BEq X]
                       (β: Assignment X univ) (x: X) (a: univ) : Assignment X univ :=
     λ y => if y == x then a else β y
 
@@ -124,17 +148,18 @@ def ex_assig_peano : Assignment String Nat
     | _ => 0
 
 
-mutual
+mutual -- this is just to persuade lean of the termination
+    @[simp]
     def evalTerm {sig: Signature} {X: Variables}
                 (I: Interpretation sig) (β: Assignment X I.univ) : @Term sig X -> I.univ
         | Term.var x => β x
         | Term.func f args => (I.functions f) $ eval_subterm I β args
+    @[simp]
     def eval_subterm {sig: Signature} {X: Variables}
                 (I: Interpretation sig) (β: Assignment X I.univ) : List (@Term sig X) -> List I.univ
         | [] => []
         | x :: xs => (evalTerm I β x) :: eval_subterm I β xs
 end
-
 
 #eval @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano (Term.var "y")
 
@@ -143,11 +168,18 @@ def ex_term_peano : Term ex_sig_peano String :=
 
 #eval @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano ex_term_peano
 
+@[simp]
+def substituteAtom {sig : Signature} {X: Variables}
+                   (σ: Substitution sig X) : @Atom sig X -> Atom sig X
+    | Atom.pred p args => Atom.pred p $ args.map (substituteTerm σ)
+    | Atom.eq lhs rhs => Atom.eq (substituteTerm σ lhs) (substituteTerm σ rhs)
+
+
+@[simp]
 def evalAtom {sig: Signature} {X: Variables}
              (I: Interpretation sig) (β: Assignment X I.univ) : @Atom sig X -> Prop
     | Atom.pred p args => (I.predicates p) (args.map (evalTerm I β))
     | Atom.eq lhs rhs => evalTerm I β lhs = evalTerm I β rhs
-
 
 @[simp]
 def evalFormula {sig: Signature} {X: Variables} [BEq X]
@@ -160,12 +192,47 @@ def evalFormula {sig: Signature} {X: Variables} [BEq X]
     | Formula.or f g => evalFormula I β f ∨ evalFormula I β g
     | Formula.imp f g => evalFormula I β f → evalFormula I β g
     | Formula.iff f g => evalFormula I β f ↔ evalFormula I β g
-    | Formula.all x f => ∀ a : I.univ, evalFormula I (β.update x a) f
-    | Formula.ex x f => ∃ a : I.univ, evalFormula I (β.update x a) f
+    | Formula.all x f => ∀ a : I.univ, evalFormula I (β.modify x a) f
+    | Formula.ex x f => ∃ a : I.univ, evalFormula I (β.modify x a) f
+
+lemma ex_peano_proof: @evalFormula ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString) ex_interpret_peano ex_assig_peano ex_formula_peano := by
+    simp
+    intro a b
+    apply Iff.intro
+    · intro h
+      cases h
+      next h' => use b - a
+                 refine Nat.add_sub_of_le ?_
+                 exact h'.le
+      · use 0; assumption
+    · intro h
+      obtain ⟨z, hz⟩ := h
+      cases hz
+      simp only [Nat.lt_add_right_iff_pos, Nat.self_eq_add_right]
+      exact Or.symm (Nat.eq_zero_or_pos z)
+
+def exa : Formula ex_sig_peano String := .and .falsum .verum
+example : ¬@evalFormula ex_sig_peano _ _ ex_interpret_peano ex_assig_peano exa :=
+    of_eq_true (Eq.trans (congrArg Not (and_true False)) not_false_eq_true)
 
 /-
-TODO: One of the examples from the script
+TODO: take care of bound variables in quantifiers
+(Qx F)σ = Qz (F σ[x 7→ z]) with z a fresh variable and Q ∈ {∀, ∃}
+However, how can we cleanly ensure that z is fresh?
 -/
+@[simp]
+def substituteFormula {sig : Signature} {X: Variables}
+                      (σ: Substitution sig X) : @Formula sig X -> @Formula sig X
+    | Formula.falsum => Formula.falsum
+    | Formula.verum => Formula.verum
+    | Formula.atom a => Formula.atom (substituteAtom σ a)
+    | Formula.neg f => Formula.neg (substituteFormula σ f)
+    | Formula.and f g => Formula.and (substituteFormula σ f) (substituteFormula σ g)
+    | Formula.or f g => Formula.or (substituteFormula σ f) (substituteFormula σ g)
+    | Formula.imp f g => Formula.imp (substituteFormula σ f) (substituteFormula σ g)
+    | Formula.iff f g => Formula.iff (substituteFormula σ f) (substituteFormula σ g)
+    | Formula.all x f => Formula.all x (substituteFormula (σ) f)
+    | Formula.ex x f => Formula.ex x (substituteFormula (σ) f)
 
 
 /-
@@ -180,19 +247,9 @@ def EntailsInterpret {sig : Signature} {X: Variables} [BEq X]
             (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) : Prop :=
     evalFormula I β F
 
--- TODO: figure out why this does not work `Decidable`?
---#eval! @evalFormula ex_sig_peano Variable _ ex_interpret_peano ex_assig_peano example_formula_peano
-
-/-example : @EntailsInterpret ex_sig_peano Variable _ ex_interpret_peano
-            ex_assig_peano example_formula_peano := by
-                simp [ex_sig_peano, ex_interpret_peano, ex_assig_peano, example_formula_peano]
-                intro univ
-                --simp [evalAtom]
-                intro a
-                intro c
-                sorry
-                sorry
--/
+example : @EntailsInterpret ex_sig_peano String _ ex_interpret_peano
+            ex_assig_peano ex_formula_peano := by
+            exact ex_peano_proof
 
 theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
             (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) :
@@ -203,7 +260,6 @@ theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
 ### Validity / Tautology
 > ⊨ F :⇔ A |= F for all A ∈ Σ-Alg
 -/
-
 @[simp]
 def Valid {sig : Signature} {X: Variables} [BEq X] (F : @Formula sig X) : Prop :=
     ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
@@ -310,6 +366,9 @@ theorem setEntails_iff_union_not_unsat
 ### 3.3.4 Substitution Lemma
 - do it later maybe
 -/
+
+
+
 
 
 /-
