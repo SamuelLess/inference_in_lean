@@ -4,8 +4,8 @@ set_option autoImplicit false
 --set_option diagnostics true
 
 /-
-### 3.1 Syntax
-## Syntax:
+## 3.1 Syntax
+### Syntax:
 - nonlogical symbols (domain-specific)
 -> terms, atomic formulas
 - logical connectives (domain-independent)
@@ -208,18 +208,23 @@ def ex_assig_peano : Assignment Variable Nat
     | "y" => 42 -- this is kind of a shortcut for `s zero`
     | _ => 0
 
-def evalTerm {sig: Signature} {X: Variables}
-             (I: Interpretation sig) (β: Assignment X I.univ) : @Term sig X -> I.univ
-    | Term.var x => β x
-    | Term.func f args h => (I.functions f h).interpreted (args.map (evalTerm I β))
+mutual
+    def evalTerm {sig: Signature} {X: Variables}
+                (I: Interpretation sig) (β: Assignment X I.univ) : @Term sig X -> I.univ
+        | Term.var x => β x
+        | Term.func f args h => (I.functions f h).interpreted $ eval_subterm I β args
+    def eval_subterm {sig: Signature} {X: Variables}
+                (I: Interpretation sig) (β: Assignment X I.univ) : List (@Term sig X) -> List I.univ
+        | [] => []
+        | x :: xs => (evalTerm I β x) :: eval_subterm I β xs
+end
 
-
-#eval! @evalTerm ex_sig_peano Variable ex_interpret_peano ex_assig_peano (Term.var "y")
+#eval @evalTerm ex_sig_peano Variable ex_interpret_peano ex_assig_peano (Term.var "y")
 
 def ex_term_peano : @Term ex_sig_peano Variable :=
     Term.func plus [Term.var "x", Term.var "y"] (by simp)
 
-#eval! @evalTerm ex_sig_peano Variable ex_interpret_peano ex_assig_peano ex_term_peano
+#eval @evalTerm ex_sig_peano Variable ex_interpret_peano ex_assig_peano ex_term_peano
 
 def evalAtom {sig: Signature} {X: Variables}
              (I: Interpretation sig) (β: Assignment X I.univ) : @Atom sig X -> Prop
@@ -259,9 +264,9 @@ def EntailsInterpret {sig : Signature} {X: Variables} [BEq X]
     evalFormula I β F
 
 -- TODO: figure out why this does not work `Decidable`?
-#eval! @evalFormula ex_sig_peano Variable _ ex_interpret_peano ex_assig_peano example_formula_peano
+--#eval! @evalFormula ex_sig_peano Variable _ ex_interpret_peano ex_assig_peano example_formula_peano
 
-example : @EntailsInterpret ex_sig_peano Variable _ ex_interpret_peano
+/-example : @EntailsInterpret ex_sig_peano Variable _ ex_interpret_peano
             ex_assig_peano example_formula_peano := by
                 simp [ex_sig_peano, ex_interpret_peano, ex_assig_peano, example_formula_peano]
                 intro univ
@@ -270,7 +275,7 @@ example : @EntailsInterpret ex_sig_peano Variable _ ex_interpret_peano
                 intro c
                 sorry
                 sorry
-
+-/
 
 theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
             (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) :
@@ -307,13 +312,6 @@ theorem entails_iff_imp_valid
     Entails F G ↔ @Valid sig X inst (Formula.imp F G) := Eq.to_iff rfl
 
 /-
-Proposition 3.3.3 Let F and G be formulas, let N be a set of formulas. Then
-(i) F is valid if and only if ¬F is unsatisfiable.
-(ii) F |= G if and only if F ∧ ¬G is unsatisfiable.
-(iii) N |= G if and only if N ∪ {¬G} is unsatisfiable.
--/
-
-/-
 ### Sat
 -/
 def Satisfiable {sig : Signature} {X: Variables} [BEq X]
@@ -325,10 +323,16 @@ theorem valid_iff_not_not_valid
     {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula) :
     Valid F ↔ ¬@Satisfiable sig X inst (Formula.neg F) := by simp [Valid, Satisfiable]
 
+/-
+Proposition 3.3.3 Let F and G be formulas, let N be a set of formulas. Then
+(i) F is valid if and only if ¬F is unsatisfiable.
+(ii) F |= G if and only if F ∧ ¬G is unsatisfiable.
+(iii) N |= G if and only if N ∪ {¬G} is unsatisfiable.
+-/
 
 
 /-
-Further stuff:
+## Further stuff:
 - Compactness
 
 -/
