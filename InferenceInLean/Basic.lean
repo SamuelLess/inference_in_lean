@@ -279,14 +279,15 @@ def EntailsInterpret {sig : Signature} {X: Variables} [BEq X]
 
 theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
             (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) :
-            EntailsInterpret I β F → ¬EntailsInterpret I β (Formula.neg F) := by
-              exact fun a a_1 ↦ a_1 a
+            EntailsInterpret I β F → ¬EntailsInterpret I β (Formula.neg F) :=
+              λ a a_1 ↦ a_1 a
 
 /-
 ### Validity / Tautology
 > ⊨ F :⇔ A |= F for all A ∈ Σ-Alg
 -/
 
+@[simp]
 def Valid {sig : Signature} {X: Variables} [BEq X] (F : @Formula sig X) : Prop :=
     ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
         evalFormula I β F
@@ -295,6 +296,7 @@ def Valid {sig : Signature} {X: Variables} [BEq X] (F : @Formula sig X) : Prop :
 ### Entailment
 F ⊨ G, if for all A ∈ Σ-Alg and β ∈ X → UA, we have A, β |= F ⇒ A, β |= G
 -/
+@[simp]
 def Entails {sig : Signature} {X: Variables} [BEq X]
              (F G : @Formula sig X) : Prop :=
     ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
@@ -314,21 +316,77 @@ theorem entails_iff_imp_valid
 /-
 ### Sat
 -/
+@[simp]
 def Satisfiable {sig : Signature} {X: Variables} [BEq X]
                 (F : @Formula sig X) : Prop :=
     ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
         EntailsInterpret I β F
 
-theorem valid_iff_not_not_valid
-    {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula) :
-    Valid F ↔ ¬@Satisfiable sig X inst (Formula.neg F) := by simp [Valid, Satisfiable]
+@[simp]
+def Unsatisfiable {sig : Signature} {X: Variables} [BEq X]
+                (F : @Formula sig X) : Prop := ¬Satisfiable F
 
 /-
 Proposition 3.3.3 Let F and G be formulas, let N be a set of formulas. Then
 (i) F is valid if and only if ¬F is unsatisfiable.
 (ii) F |= G if and only if F ∧ ¬G is unsatisfiable.
+-/
+
+theorem valid_iff_not_unsat
+    {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula) :
+    Valid F ↔ @Unsatisfiable sig X inst (Formula.neg F) := by
+        simp
+
+theorem entails_iff_and_not_unsat
+    {sig : Signature} {X : Variables} [inst : BEq X] (F G : Formula) :
+    Entails F G ↔ @Unsatisfiable sig X inst (Formula.and F (Formula.neg G)) := by
+        simp
+
+/-
+Expand this to sets of Formulas
+-/
+
+@[simp]
+def SetEntails {sig : Signature} {X: Variables} [BEq X]
+            (N : Set (@Formula sig X)) (F : @Formula sig X) : Prop :=
+    ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+        (∀ G ∈ N, EntailsInterpret I β G) → EntailsInterpret I β F
+
+theorem entails_setEntails
+    {sig : Signature} {X : Variables} [inst : BEq X] (F G : Formula) :
+    Entails F G ↔ @SetEntails sig X inst {F} G := by
+        simp
+
+@[simp]
+def SetSatisfiable {sig : Signature} {X: Variables} [BEq X]
+                   (N : Set (@Formula sig X)) : Prop :=
+    ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
+        ∀ G ∈ N, EntailsInterpret I β G
+
+@[simp]
+def SetUnsatisfiable {sig : Signature} {X: Variables} [BEq X]
+                     (N : Set (@Formula sig X)) : Prop :=
+    ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+        ∃ G ∈ N, ¬EntailsInterpret I β G
+
+lemma sat_as_set_sat
+    {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula) :
+       Satisfiable F → @SetSatisfiable sig X inst {F} :=
+       by simp only [Satisfiable, EntailsInterpret, SetSatisfiable, Set.mem_singleton_iff,
+         forall_eq, imp_self]
+
+lemma unsat_as_set_unsat
+    {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula) :
+       Unsatisfiable F → @SetUnsatisfiable sig X inst {F} :=
+       by simp
+/-
+-- TODO: finish this proof
 (iii) N |= G if and only if N ∪ {¬G} is unsatisfiable.
 -/
+theorem setEntails_iff_union_not_unsat
+    {sig : Signature} {X : Variables} [inst : BEq X] (N : Set Formula) (G : Formula) :
+    SetEntails N G ↔ @SetUnsatisfiable sig X inst (N ∪ {Formula.neg G}) := by
+        sorry
 
 
 /-
