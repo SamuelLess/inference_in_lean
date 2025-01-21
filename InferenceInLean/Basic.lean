@@ -1,4 +1,5 @@
 import Mathlib.Data.Set.Basic
+import Mathlib.Data.Finset.Range
 
 set_option autoImplicit false
 --set_option diagnostics true
@@ -310,6 +311,61 @@ def ClauseSetSatisfiable {sig : Signature} {X : Variables} [BEq X]
 - do it later maybe
 -/
 
+/-
+### 3.7 Inference Systems and Proofs
+-/
+structure Inference (sig : Signature) (X : Variables) where
+    Premises : Set (Formula sig X)
+    Conclusion : Formula sig X
+
+structure InferenceSystem (sig : Signature) (X : Variables) where
+    Inferences : List (Inference sig X)
+
+structure Proof {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) where
+    Assumptions : Set (Formula sig X)
+    Conclusion : Formula sig X
+    Formulas : List (Formula sig X)
+    FormulasNonEmpty : Formulas ≠ ∅
+    LastFormulaIsConclusion : Formulas.getLast FormulasNonEmpty = Conclusion
+    IsValid : ∀ i (hindex : i < Formulas.length) (hnonzero : 1 ≤ i),
+        Formulas[i] ∈ Assumptions ∨
+        ∃ inference ∈ Γ.Inferences,
+            Formulas[i] = inference.Conclusion ∧
+            ∀ formula ∈ inference.Premises,
+                ∃ (j : ℕ) (hjindex : j < i),
+                    formula = Formulas[j]
+
+def provability {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) (N : Set (Formula sig X)) (F : Formula sig X) :=
+    ∃ proof : Proof Γ, proof.Assumptions = N ∧ proof.Conclusion = F
+
+def soundness {sig : Signature} {X : Variables} [inst : BEq X] (Γ : InferenceSystem sig X) :=
+    ∀ inference ∈ Γ.Inferences, SetEntails inference.Premises inference.Conclusion
+
+def general_soundness {sig : Signature} {X : Variables} [inst : BEq X] (Γ : InferenceSystem sig X) :=
+    ∀ (N : Set (Formula sig X)) (F : Formula sig X), provability Γ N F → SetEntails N F
+
+theorem soundness_definitions_are_equivalent {sig : Signature} {X : Variables} [inst : BEq X] (Γ : InferenceSystem sig X) :
+        soundness Γ → general_soundness Γ := by
+    intro hsound N F hproof A β hgstrue
+    rcases hproof with ⟨proof, ⟨hassumptions, hconclusion⟩⟩
+    have hproofsequencetrue : ∀ F ∈ proof.Formulas, EntailsInterpret A β F := sorry
+    have hlen : proof.Formulas.length - 1 < proof.Formulas.length := sorry
+    have hfconclusion := proof.IsValid (proof.Formulas.length - 1) hlen sorry
+    have hfislast : proof.Formulas[proof.Formulas.length - 1] = F := sorry
+    rw [hfislast] at hfconclusion
+    rcases hfconclusion with hl | hr
+    · aesop
+    subst hassumptions hconclusion
+    obtain ⟨inference, h⟩ := hr
+    obtain ⟨hinf, right⟩ := h
+    obtain ⟨hconcs, hforms⟩ := right
+    have h := hsound inference hinf
+    rw [hconcs]
+    apply h
+    intro G hgprem
+    have hinf := hforms G hgprem
+    rcases hinf with ⟨j, hjnotconc, hginforms⟩
+    aesop
 
 /-
 ## Further stuff:
