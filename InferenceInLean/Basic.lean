@@ -368,6 +368,41 @@ theorem soundness_definitions_are_equivalent {sig : Signature} {X : Variables} [
     aesop
 
 /-
+### 3.8 Ground (or Propositional) Resolution
+-/
+theorem ResolutionIsSound {sig : Signature} {X : Variables} [inst : BEq X] {D A C : Formula sig X}
+        (Resolution : Inference sig X) (hresolution : Resolution = ⟨{.or D A, .or C (.neg A)}, .or D C⟩)
+        (Factorization : Inference sig X) (hfactorization : Factorization = ⟨{.or (.or C A) A}, .or C A⟩)
+        (Γ_Resolution : InferenceSystem sig X) (hgamma : Γ_Resolution = ⟨[Resolution, Factorization]⟩)
+        : soundness Γ_Resolution := by
+    intro inference hinf I β hgstrue
+    -- aesop would already close the goal here
+    subst hresolution hgamma hfactorization
+    simp_all only [EntailsInterpret, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false]
+    rcases hinf with hres | hfact
+    -- we first show that the resolution inference rule is correct
+    · subst hres
+      simp_all only [Set.mem_insert_iff, Set.mem_singleton_iff, forall_eq_or_imp, evalFormula, forall_eq]
+      obtain ⟨D_or_A, C_or_notA⟩ := hgstrue
+      rcases D_or_A with hD | hA
+      · left
+        exact hD
+      · rcases C_or_notA with hC | hnA
+        · right
+          exact hC
+        · exact False.elim (hnA hA)
+    -- next, we show that the factorization inference rule is correct
+    · subst hfact
+      simp_all only [Set.mem_singleton_iff, evalFormula, forall_eq]
+      rcases hgstrue with (hC | hA) | hA
+      · left
+        exact hC
+      · right
+        exact hA
+      · right
+        exact hA
+
+/-
 ## Further stuff:
 - Compactness
 
