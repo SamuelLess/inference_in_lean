@@ -135,7 +135,7 @@ def Assignment.modify {X: Variables} {univ: Universes} [BEq X]
 
 mutual -- this is just to persuade lean of the termination
     @[simp]
-    def evalTerm {sig: Signature} {X: Variables}
+    def Term.eval {sig: Signature} {X: Variables}
                 (I: Interpretation sig) (β: Assignment X I.univ) : @Term sig X -> I.univ
         | Term.var x => β x
         | Term.func f args => (I.functions f) $ eval_subterm I β args
@@ -143,8 +143,9 @@ mutual -- this is just to persuade lean of the termination
     def eval_subterm {sig: Signature} {X: Variables}
                 (I: Interpretation sig) (β: Assignment X I.univ) : List (@Term sig X) -> List I.univ
         | [] => []
-        | x :: xs => (evalTerm I β x) :: eval_subterm I β xs
+        | x :: xs => (Term.eval I β x) :: eval_subterm I β xs
 end
+
 
 @[simp]
 def Atom.substitute {sig : Signature} {X: Variables} [BEq X]
@@ -155,8 +156,8 @@ def Atom.substitute {sig : Signature} {X: Variables} [BEq X]
 @[simp]
 def Atom.eval {sig: Signature} {X: Variables}
              (I: Interpretation sig) (β: Assignment X I.univ) : @Atom sig X -> Prop
-    | Atom.pred p args => (I.predicates p) (args.map (evalTerm I β))
-    | Atom.eq lhs rhs => evalTerm I β lhs = evalTerm I β rhs
+    | Atom.pred p args => (I.predicates p) (args.map (Term.eval I β))
+    | Atom.eq lhs rhs => Term.eval I β lhs = Term.eval I β rhs
 
 @[simp]
 def Formula.eval {sig: Signature} {X: Variables} [BEq X]
@@ -185,6 +186,7 @@ def Formula.freeVars {sig : Signature} {X: Variables} : @Formula sig X -> Set X
     | Formula.all x f => Formula.freeVars f \ {x}
     | Formula.ex x f => Formula.freeVars f \ {x}
 
+
 /-
 TODO: take care of bound variables in quantifiers or maybe just dont care?
 (Qx F)σ = Qz (F σ[x → z]) with z a fresh variable and Q ∈ {∀, ∃}
@@ -193,7 +195,7 @@ Do we even need to? Let's not do it now and mabye add some hypothesis for the su
 This should force drastic modifications of everything buildng on this (fingers crossed).
 -/
 @[simp]
-noncomputable def Formula.substitute {sig : Signature} {X: Variables} [inst : BEq X] [inst_nonempty : Nonempty X]
+def Formula.substitute {sig : Signature} {X: Variables} [inst : BEq X] [inst_nonempty : Nonempty X]
                       (σ: Substitution sig X) : @Formula sig X -> @Formula sig X
     | Formula.falsum => Formula.falsum
     | Formula.verum => Formula.verum
@@ -205,10 +207,6 @@ noncomputable def Formula.substitute {sig : Signature} {X: Variables} [inst : BE
     | Formula.iff f g => Formula.iff (substitute σ f) (substitute σ g)
     | Formula.all x f => Formula.all x (substitute σ f)
     | Formula.ex x f => Formula.all x (substitute σ f)
-    /-| Formula.all x f => have z := Classical.choice inst_nonempty
-                         Formula.all z (substitute (σ.modify x (Term.var z)) f)
-    | Formula.ex x f => have z := Classical.choice inst_nonempty
-                        Formula.ex z (substitute (σ.modify x (Term.var z)) f)-/
 
 
 /-
@@ -331,6 +329,24 @@ def ClauseSetSatisfiable {sig : Signature} {X : Variables} [BEq X]
 ### 3.3.4 Substitution Lemma
 - do it later maybe
 -/
+mutual
+    def Term.compose {sig : Signature} {X : Variables} [BEq X]
+                        (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) : I.univ :=
+                match t with
+                | Term.var x => Term.eval I β (σ.apply x)
+                | Term.func f args => I.functions f $ compose_args I β σ args
+    def compose_args {sig : Signature} {X : Variables} [BEq X]
+                 (I : Interpretation sig) (β: Assignment X I.univ)
+                 (σ: Substitution sig X) : List (Term sig X) -> List (I.univ)
+                    | [] => []
+                    | x :: xs => Term.compose I β σ x :: (compose_args I β σ xs)
+end
+
+theorem substitution_lemma {sig : Signature} {X : Variables} [BEq X]
+                           (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) :
+                           Term.eval I β (t.substitute σ) = Term.compose I β σ t := by
+                            sorry
+
 
 /-
 ### 3.7 Inference Systems and Proofs
@@ -391,7 +407,7 @@ theorem soundness_definitions_are_equivalent {sig : Signature} {X : Variables} [
 /-
 ### 3.8 Ground (or Propositional) Resolution
 -/
-theorem ResolutionIsSound {sig : Signature} {X : Variables} [inst : BEq X] {D A C : Formula sig X}
+theorem GroundResolutionIsSound {sig : Signature} {X : Variables} [inst : BEq X] {D A C : Formula sig X}
         (Resolution : Inference sig X) (hresolution : Resolution = ⟨{.or D A, .or C (.neg A)}, .or D C⟩)
         (Factorization : Inference sig X) (hfactorization : Factorization = ⟨{.or (.or C A) A}, .or C A⟩)
         (Γ_Resolution : InferenceSystem sig X) (hgamma : Γ_Resolution = ⟨[Resolution, Factorization]⟩)

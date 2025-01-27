@@ -1,4 +1,5 @@
 import InferenceInLean.Basic
+import Mathlib.Data.Finset.Defs
 
 open FirstOrder
 
