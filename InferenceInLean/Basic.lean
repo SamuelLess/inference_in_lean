@@ -66,22 +66,40 @@ inductive Formula (sig: Signature) (X: Variables) where
     | all (x: X) (f: @Formula sig X)
     | ex (x: X) (f: @Formula sig X)
 
-def Substitution (sig : Signature) (X : Variables) := X → Term sig X
+inductive Substitution (sig : Signature) (X : Variables) where
+    | empty : Substitution sig X
+    | cons : Substitution sig X -> X -> Term sig X -> Substitution sig X
 
-def Substitution.modify (sig : Signature) (X : Variables) [BEq X] :=
-    λ (σ: Substitution sig X) (x: X) (a: Term sig X) (y: X) =>
-        if y == x then a else σ y
+def Substitution.apply {sig : Signature} {X : Variables} [BEq X] :=
+    λ (σ: Substitution sig X) (x: X) => match σ with
+        | Substitution.empty => Term.var x
+        | Substitution.cons σ' y a => if y == x then a else σ'.apply x
+
+/-This is basically wrapping the cons constructor. Due to the list-like nature this
+does remove the old substitution of x.
+This could be rewritten to actually build a new substitution but that seems overkill.-/
+def Substitution.modify {sig : Signature} {X : Variables} [BEq X]
+       (σ: Substitution sig X) (x: X) (a: Term sig X) : Substitution sig X :=
+        Substitution.cons σ x a
+
+def Substitution.domain {sig : Signature} {X : Variables} [BEq X] : Substitution sig X -> Set X
+    | Substitution.empty => ∅
+    | Substitution.cons σ x _ => {x} ∪ Substitution.domain σ
+
+def Substitution.codomain {sig : Signature} {X : Variables} [BEq X] : Substitution sig X -> Set X
+    | Substitution.empty => ∅
+    | Substitution.cons σ _ a => a.freeVars ∪ Substitution.codomain σ
 
 mutual
     @[simp]
-    def substituteTerm {sig : Signature} {X: Variables}
+    def Term.substitute {sig : Signature} {X: Variables} [BEq X]
                     (σ: Substitution sig X) : @Term sig X -> Term sig X
-        | Term.var x => σ x
+        | Term.var x => σ.apply x
         | Term.func f args => Term.func f $ substitute_args σ args
-    def substitute_args {sig : Signature} {X: Variables}
+    def substitute_args {sig : Signature} {X: Variables} [BEq X]
                     (σ: Substitution sig X) : List (@Term sig X) -> List (@Term sig X)
         | [] => []
-        | x :: xs => substituteTerm σ x :: substitute_args σ xs
+        | x :: xs => Term.substitute σ x :: substitute_args σ xs
 end
 
 
@@ -129,30 +147,30 @@ mutual -- this is just to persuade lean of the termination
 end
 
 @[simp]
-def substituteAtom {sig : Signature} {X: Variables}
+def Atom.substitute {sig : Signature} {X: Variables} [BEq X]
                    (σ: Substitution sig X) : @Atom sig X -> Atom sig X
-    | Atom.pred p args => Atom.pred p $ args.map (substituteTerm σ)
-    | Atom.eq lhs rhs => Atom.eq (substituteTerm σ lhs) (substituteTerm σ rhs)
+    | Atom.pred p args => Atom.pred p $ args.map (.substitute σ)
+    | Atom.eq lhs rhs => Atom.eq (.substitute σ lhs) (.substitute σ rhs)
 
 @[simp]
-def evalAtom {sig: Signature} {X: Variables}
+def Atom.eval {sig: Signature} {X: Variables}
              (I: Interpretation sig) (β: Assignment X I.univ) : @Atom sig X -> Prop
     | Atom.pred p args => (I.predicates p) (args.map (evalTerm I β))
     | Atom.eq lhs rhs => evalTerm I β lhs = evalTerm I β rhs
 
 @[simp]
-def evalFormula {sig: Signature} {X: Variables} [BEq X]
+def Formula.eval {sig: Signature} {X: Variables} [BEq X]
                 (I: Interpretation sig) (β: Assignment X I.univ) : @Formula sig X -> Prop
     | Formula.falsum => False
     | Formula.verum => True
-    | Formula.atom a => evalAtom I β a
-    | Formula.neg f => ¬ evalFormula I β f
-    | Formula.and f g => evalFormula I β f ∧ evalFormula I β g
-    | Formula.or f g => evalFormula I β f ∨ evalFormula I β g
-    | Formula.imp f g => evalFormula I β f → evalFormula I β g
-    | Formula.iff f g => evalFormula I β f ↔ evalFormula I β g
-    | Formula.all x f => ∀ a : I.univ, evalFormula I (β.modify x a) f
-    | Formula.ex x f => ∃ a : I.univ, evalFormula I (β.modify x a) f
+    | Formula.atom a => Atom.eval I β a
+    | Formula.neg f => ¬ Formula.eval I β f
+    | Formula.and f g => Formula.eval I β f ∧ Formula.eval I β g
+    | Formula.or f g => Formula.eval I β f ∨ Formula.eval I β g
+    | Formula.imp f g => Formula.eval I β f → Formula.eval I β g
+    | Formula.iff f g => Formula.eval I β f ↔ Formula.eval I β g
+    | Formula.all x f => ∀ a : I.univ, Formula.eval I (β.modify x a) f
+    | Formula.ex x f => ∃ a : I.univ, Formula.eval I (β.modify x a) f
 
 
 def Formula.freeVars {sig : Signature} {X: Variables} : @Formula sig X -> Set X
@@ -168,26 +186,29 @@ def Formula.freeVars {sig : Signature} {X: Variables} : @Formula sig X -> Set X
     | Formula.ex x f => Formula.freeVars f \ {x}
 
 /-
-TODO: take care of bound variables in quantifiers
+TODO: take care of bound variables in quantifiers or maybe just dont care?
 (Qx F)σ = Qz (F σ[x → z]) with z a fresh variable and Q ∈ {∀, ∃}
 However, how can we cleanly ensure that z is fresh?
+Do we even need to? Let's not do it now and mabye add some hypothesis for the substiution later.
+This should force drastic modifications of everything buildng on this (fingers crossed).
 -/
 @[simp]
-noncomputable def substituteFormula {sig : Signature} {X: Variables} [inst : BEq X] [inst_nonempty : Nonempty X]
+noncomputable def Formula.substitute {sig : Signature} {X: Variables} [inst : BEq X] [inst_nonempty : Nonempty X]
                       (σ: Substitution sig X) : @Formula sig X -> @Formula sig X
     | Formula.falsum => Formula.falsum
     | Formula.verum => Formula.verum
-    | Formula.atom a => Formula.atom (substituteAtom σ a)
-    | Formula.neg f => Formula.neg (substituteFormula σ f)
-    | Formula.and f g => Formula.and (substituteFormula σ f) (substituteFormula σ g)
-    | Formula.or f g => Formula.or (substituteFormula σ f) (substituteFormula σ g)
-    | Formula.imp f g => Formula.imp (substituteFormula σ f) (substituteFormula σ g)
-    | Formula.iff f g => Formula.iff (substituteFormula σ f) (substituteFormula σ g)
-    | Formula.all x f => have z := Classical.choice inst_nonempty
-                         Formula.all z (substituteFormula (σ.modify sig X x (Term.var z)) f)
+    | Formula.atom a => Formula.atom (Atom.substitute σ a)
+    | Formula.neg f => Formula.neg (substitute σ f)
+    | Formula.and f g => Formula.and (substitute σ f) (substitute σ g)
+    | Formula.or f g => Formula.or (substitute σ f) (substitute σ g)
+    | Formula.imp f g => Formula.imp (substitute σ f) (substitute σ g)
+    | Formula.iff f g => Formula.iff (substitute σ f) (substitute σ g)
+    | Formula.all x f => Formula.all x (substitute σ f)
+    | Formula.ex x f => Formula.all x (substitute σ f)
+    /-| Formula.all x f => have z := Classical.choice inst_nonempty
+                         Formula.all z (substitute (σ.modify x (Term.var z)) f)
     | Formula.ex x f => have z := Classical.choice inst_nonempty
-                        Formula.ex x (substituteFormula (σ.modify sig X x (Term.var z)) f)
-
+                        Formula.ex z (substitute (σ.modify x (Term.var z)) f)-/
 
 
 /-
@@ -200,7 +221,7 @@ noncomputable def substituteFormula {sig : Signature} {X: Variables} [inst : BEq
 @[simp]
 def EntailsInterpret {sig : Signature} {X: Variables} [BEq X]
             (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) : Prop :=
-    evalFormula I β F
+    Formula.eval I β F
 
 theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
             (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) :
@@ -214,7 +235,7 @@ theorem not_entails_not {sig : Signature} {X: Variables} [BEq X]
 @[simp]
 def Valid {sig : Signature} {X: Variables} [BEq X] (F : @Formula sig X) : Prop :=
     ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
-        evalFormula I β F
+        Formula.eval I β F
 
 /-
 ### Entailment
@@ -382,7 +403,7 @@ theorem ResolutionIsSound {sig : Signature} {X : Variables} [inst : BEq X] {D A 
     rcases hinf with hres | hfact
     -- we first show that the resolution inference rule is correct
     · subst hres
-      simp_all only [Set.mem_insert_iff, Set.mem_singleton_iff, forall_eq_or_imp, evalFormula, forall_eq]
+      simp_all only [Set.mem_insert_iff, Set.mem_singleton_iff, forall_eq_or_imp, Formula.eval, forall_eq]
       obtain ⟨D_or_A, C_or_notA⟩ := hgstrue
       rcases D_or_A with hD | hA
       · left
@@ -393,7 +414,7 @@ theorem ResolutionIsSound {sig : Signature} {X : Variables} [inst : BEq X] {D A 
         · exact False.elim (hnA hA)
     -- next, we show that the factorization inference rule is correct
     · subst hfact
-      simp_all only [Set.mem_singleton_iff, evalFormula, forall_eq]
+      simp_all only [Set.mem_singleton_iff, Formula.eval, forall_eq]
       rcases hgstrue with (hC | hA) | hA
       · left
         exact hC

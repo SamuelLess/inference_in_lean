@@ -47,10 +47,28 @@ def ex_interpret_peano : Interpretation ex_sig_peano :=
     }
 
 def ex_assig_peano : Assignment String Nat
-    | "x" => 21 -- this is kind of a shortcut for `s ... s zero`
-    | "y" => 42 -- this is kind of a shortcut for `s zero`
+    | "x" => 0
+    | "y" => 0
     | _ => 0
 
+def example_substitution : Substitution ex_sig_peano String := .cons .empty ("x") (Term.func .succ [Term.var "y"])
+
+def ex_formula_peano_lt : @Formula ex_sig_peano String :=
+    .all "z" (.atom $ .pred .less_than [.var "x", .func .succ [.func .succ [.var "z"]]])
+
+lemma ex_proof_lt : @Formula.eval ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString)
+    ex_interpret_peano ex_assig_peano ex_formula_peano_lt := by
+        simp [ex_formula_peano_lt, ex_sig_peano, Interpretation, Assignment, ex_assig_peano]
+
+noncomputable def ex_formula_peano_lt_subst : @Formula ex_sig_peano String := ex_formula_peano_lt.substitute example_substitution
+
+lemma ex_proof_lt_subst : @Formula.eval ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString)
+    ex_interpret_peano ex_assig_peano ex_formula_peano_lt_subst := by
+        simp only [ex_sig_peano, ex_interpret_peano, ex_formula_peano_lt_subst]
+        simp only [example_substitution, ex_sig_peano]
+        rw [ex_formula_peano_lt]
+        simp [Formula.substitute, ex_interpret_peano, ex_assig_peano]
+        simp [Substitution.apply, substitute_args, ex_assig_peano]
 
 #eval @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano (Term.var "y")
 
@@ -59,7 +77,7 @@ def ex_term_peano : Term ex_sig_peano String :=
 
 #eval @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano ex_term_peano
 
-lemma ex_peano_proof: @evalFormula ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString) ex_interpret_peano ex_assig_peano ex_formula_peano := by
+lemma ex_peano_proof: @Formula.eval ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString) ex_interpret_peano ex_assig_peano ex_formula_peano := by
     simp
     intro a b
     apply Iff.intro
@@ -76,13 +94,12 @@ lemma ex_peano_proof: @evalFormula ex_sig_peano String (@instBEqOfDecidableEq St
       exact Or.symm (Nat.eq_zero_or_pos z)
 
 def exa : Formula ex_sig_peano String := .and .falsum .verum
-example : ¬@evalFormula ex_sig_peano _ _ ex_interpret_peano ex_assig_peano exa :=
+example : ¬@Formula.eval ex_sig_peano _ _ ex_interpret_peano ex_assig_peano exa :=
     of_eq_true (Eq.trans (congrArg Not (and_true False)) not_false_eq_true)
 
 
 example : @EntailsInterpret ex_sig_peano String _ ex_interpret_peano
-            ex_assig_peano ex_formula_peano := by
-            exact ex_peano_proof
+            ex_assig_peano ex_formula_peano := ex_peano_proof
 
 
 /-
