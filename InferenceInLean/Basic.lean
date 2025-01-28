@@ -364,7 +364,7 @@ structure Proof {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) w
     Formulas : List (Formula sig X)
     FormulasNonEmpty : Formulas ≠ ∅
     LastFormulaIsConclusion : Formulas.getLast FormulasNonEmpty = Conclusion
-    IsValid : ∀ i (hindex : i < Formulas.length) (hnonzero : 1 ≤ i),
+    IsValid : ∀ i (hindex : i < Formulas.length),
         Formulas[i] ∈ Assumptions ∨
         ∃ inference ∈ Γ.Inferences,
             Formulas[i] = inference.Conclusion ∧
@@ -385,9 +385,31 @@ theorem soundness_definitions_are_equivalent {sig : Signature} {X : Variables} [
         soundness Γ → general_soundness Γ := by
     intro hsound N F hproof A β hgstrue
     rcases hproof with ⟨proof, ⟨hassumptions, hconclusion⟩⟩
-    have hproofsequencetrue : ∀ F ∈ proof.Formulas, EntailsInterpret A β F := sorry
+    have hproofsequencetrue : ∀ F ∈ proof.Formulas, EntailsInterpret A β F := by
+        have hindicestrue : ∀ i (hindex : i < proof.Formulas.length), EntailsInterpret A β proof.Formulas[i] := by
+            intro i hlen
+            induction' i using Nat.case_strong_induction_on with i ih
+            · have hvalid := proof.IsValid 0 hlen
+              aesop
+            · have hvalid := proof.IsValid (i + 1) hlen
+              rcases hvalid with hassump | hconseq
+              · aesop
+              · rcases hconseq with ⟨inference, ⟨hin, ⟨hlast, hprev⟩⟩⟩
+                rw [hlast]
+                have hinfsound := hsound inference hin
+                apply hinfsound
+                intro inf_form hprem
+                have hinftrue := hprev inf_form hprem
+                rcases hinftrue with ⟨j, ⟨hjindex, heq⟩⟩
+                have hjtrue := ih j (Nat.le_of_lt_succ hjindex) (Nat.lt_trans hjindex hlen)
+                rw [heq]
+                exact hjtrue
+        intro F hF
+        have hfindex : ∃ (i : ℕ) (hindex : i < proof.Formulas.length), F = proof.Formulas[i] := by
+            sorry
+        aesop
     have hlen : proof.Formulas.length - 1 < proof.Formulas.length := sorry
-    have hfconclusion := proof.IsValid (proof.Formulas.length - 1) hlen sorry
+    have hfconclusion := proof.IsValid (proof.Formulas.length - 1) hlen
     have hfislast : proof.Formulas[proof.Formulas.length - 1] = F := sorry
     rw [hfislast] at hfconclusion
     rcases hfconclusion with hl | hr
