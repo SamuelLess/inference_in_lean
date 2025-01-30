@@ -52,7 +52,9 @@ def ex_assig_peano : Assignment String Nat
     | "y" => 0
     | _ => 0
 
-def example_substitution : Substitution ex_sig_peano String := .cons .empty ("x") (Term.func .succ [Term.var "y"])
+def example_substitution : Substitution ex_sig_peano String := λ x => match x with
+    | "x" => Term.func .succ [Term.var "y"]
+    | _ => Term.var x
 
 def ex_formula_peano_lt : @Formula ex_sig_peano String :=
     .all "z" (.atom $ .pred .less_than [.var "x", .func .succ [.func .succ [.var "z"]]])
@@ -66,17 +68,17 @@ noncomputable def ex_formula_peano_lt_subst : @Formula ex_sig_peano String := ex
 lemma ex_proof_lt_subst : @Formula.eval ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString)
     ex_interpret_peano ex_assig_peano ex_formula_peano_lt_subst := by
         simp only [ex_sig_peano, ex_interpret_peano, ex_formula_peano_lt_subst]
+        unfold example_substitution
         simp only [example_substitution, ex_sig_peano]
         rw [ex_formula_peano_lt]
         simp [Formula.substitute, ex_interpret_peano, ex_assig_peano]
-        simp [Substitution.apply, substitute_args, ex_assig_peano]
 
-#eval @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano (Term.var "y")
+#eval @Term.eval ex_sig_peano String ex_interpret_peano ex_assig_peano (Term.var "y")
 
 def ex_term_peano : Term ex_sig_peano String :=
     Term.func .add [Term.var "x", Term.var "y"]
 
-#eval @evalTerm ex_sig_peano String ex_interpret_peano ex_assig_peano ex_term_peano
+#eval @Term.eval ex_sig_peano String ex_interpret_peano ex_assig_peano ex_term_peano
 
 lemma ex_peano_proof: @Formula.eval ex_sig_peano String (@instBEqOfDecidableEq String instDecidableEqString) ex_interpret_peano ex_assig_peano ex_formula_peano := by
     simp
@@ -164,3 +166,6 @@ theorem ex_4_7 {sig : Signature} {X : Variables} [BEq X]
           -/
           next h => sorry
           next h => exact hN'sat C h
+
+
+lemma test {M : Set ℕ} (h : ∀ a, a ∉ M): M = ∅ := by exact Set.eq_empty_of_forall_not_mem h

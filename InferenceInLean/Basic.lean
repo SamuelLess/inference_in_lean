@@ -25,14 +25,6 @@ inductive Term (sig : Signature) (X : Variables) where
     | func (f: sig.funs)
            (args: List (Term sig X))
 
--- original attempt to define an induction schema - however, this one is useless
---lemma Term.induction {sig : Signature} {X : Variables} (P : (Term sig X) → Prop) (base : ∀ x : X, P (var x)) (step : (ih : ∀ x : X, P (var x)) → ∀ (f : sig.funs) (args : List (Term sig X)), P (func f args)) : ∀ (t : Term sig X), P t := by
-    --intro t
-    --match t with
-    --| var y => exact base y
-    --| func f args => exact step base f args
-
--- We don't get induction for nested inductive types, so we need to define the scheme manually
 lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Prop} (base : ∀ x : X, P (var x))
                       (step : ∀ (args : List (Term sig X)), (ih : ∀ term ∈ args, P term) → ∀ (f : sig.funs), P (func f args))
                       : ∀ (t : Term sig X), P t := by
@@ -53,8 +45,6 @@ def Term.freeVars {sig : Signature} {X: Variables} : @Term sig X -> Set X
     | .var x => {x}
     | .func _ [] => ∅
     | .func f (a :: args) => Term.freeVars a ∪ Term.freeVars (Term.func f args)
-    -- not using foldl becaus termination...
-
 
 -- TODO: build all of this up with the `ValidTerm`
 inductive Atom (sig : Signature) (X : Variables) where
@@ -90,39 +80,23 @@ inductive Formula (sig: Signature) (X: Variables) where
     | all (x: X) (f: @Formula sig X)
     | ex (x: X) (f: @Formula sig X)
 
-inductive Substitution (sig : Signature) (X : Variables) where
-    | empty : Substitution sig X
-    | cons : Substitution sig X -> X -> Term sig X -> Substitution sig X
-
 @[simp]
-def Substitution.apply {sig : Signature} {X : Variables} [BEq X] :=
-    λ (σ: Substitution sig X) (x: X) => match σ with
-        | Substitution.empty => Term.var x
-        | Substitution.cons σ' y a => if y == x then a else σ'.apply x
+def Substitution (sig : Signature) (X : Variables) := X -> Term sig X
 
-/-This is basically wrapping the cons constructor. Due to the list-like nature this
-does remove the old substitution of x.
-This could be rewritten to actually build a new substitution but that seems overkill.-/
 @[simp]
 def Substitution.modify {sig : Signature} {X : Variables} [BEq X]
-       (σ: Substitution sig X) (x: X) (a: Term sig X) : Substitution sig X :=
-        Substitution.cons σ x a
-
-def Substitution.domain {sig : Signature} {X : Variables} [BEq X] : Substitution sig X -> Set X
-    | Substitution.empty => ∅
-    | Substitution.cons σ x _ => {x} ∪ Substitution.domain σ
-
-def Substitution.codomain {sig : Signature} {X : Variables} [BEq X] : Substitution sig X -> Set X
-    | Substitution.empty => ∅
-    | Substitution.cons σ _ a => a.freeVars ∪ Substitution.codomain σ
-
+                        (σ: Substitution sig X) (x: X) (a: Term sig X) : Substitution sig X :=
+    λ y => if y == x then a else σ y
 
 @[simp]
-def Term.substitute {sig : Signature} {X: Variables} [BEq X]
-                (σ: Substitution sig X) : @Term sig X -> Term sig X
-    | Term.var x => σ.apply x
+def Term.substitute {sig : Signature} {X: Variables}
+                    (σ: Substitution sig X) : @Term sig X -> Term sig X
+    | Term.var x => σ x
     | Term.func f args => Term.func f $ args.attach.map (λ ⟨a, _⟩ => a.substitute σ)
 
+@[simp]
+def Substitution.compose {sig : Signature} {X : Variables} (σ: Substitution sig X) (τ: Substitution sig X) : Substitution sig X :=
+    λ x => (σ x).substitute τ
 
 
 /-
@@ -346,10 +320,11 @@ def ClauseSetSatisfiable {sig : Signature} {X : Variables} [BEq X]
 -/
 @[simp]
 def Term.compose {sig : Signature} {X : Variables} [BEq X]
-                    (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) : I.univ :=
-            match t with
-            | Term.var x => Term.eval I β (σ.apply x)
-            | Term.func f args => I.functions f $ args.attach.map (λ ⟨a, _⟩ => Term.compose I β σ a)
+    (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) :
+    I.univ :=
+  match t with
+  | Term.var x => Term.eval I β (σ x)
+  | Term.func f args => I.functions f $ args.attach.map (λ ⟨a, _⟩ => Term.compose I β σ a)
 
 theorem substitution_lemma {sig : Signature} {X : Variables} [BEq X]
                            (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) :
@@ -378,6 +353,41 @@ theorem substitution_lemma' {sig : Signature} {X : Variables} [BEq X]
                                 have hargsarequal : List.map (Term.compose I β σ) args = List.map (Term.eval I β ∘ Term.substitute σ) args := by
                                     simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
                                 rw [hargsarequal]
+
+
+/-
+### Unification
+-/
+
+@[simp]
+def Equality (sig : Signature) (X : Variables) :=
+    Term sig X × Term sig X
+
+@[simp]
+def EqualityProblem (sig : Signature) (X : Variables) :=
+    List (Equality sig X)
+
+instance {sig : Signature} {X: Variables} : Membership (Equality sig X) (EqualityProblem sig X)
+    := List.instMembership
+
+@[simp]
+def Unifier {sig : Signature} {X : Variables} [BEq X] (E : @EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
+    ∀ eq ∈ E, have ⟨lhs, rhs⟩ := eq; lhs.substitute σ = rhs.substitute σ
+
+def example_unification_problem : EqualityProblem (Signature.mk String String) String :=
+    [(.func "f" [Term.var "x"], Term.var "y")]
+
+def example_unifier : Substitution (Signature.mk String String) String :=
+    λ x => if x == "y" then Term.func "f" [Term.var "x"] else Term.var x
+
+theorem example_unification : Unifier example_unification_problem example_unifier := by
+    simp [example_unification_problem]
+    unfold example_unifier
+    simp
+
+def MoreGeneral {sig : Signature} {X : Variables} [BEq X] (σ τ : Substitution sig X) : Prop :=
+    ∃ ρ : Substitution sig X, σ = ρ.compose τ
+
 
 /-
 ### 3.7 Inference Systems and Proofs
