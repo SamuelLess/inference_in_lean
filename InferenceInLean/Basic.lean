@@ -33,7 +33,7 @@ def Term.freeVars {sig : Signature} {X: Variables} : @Term sig X -> Set X
 
 
 -- TODO: build all of this up with the `ValidTerm`
-inductive Atom (sig : Signature) (X : Type) where
+inductive Atom (sig : Signature) (X : Variables) where
     | pred (p: sig.preds) (args: List (Term sig X))
     | eq (lhs rhs: Term sig X)
 
@@ -90,17 +90,13 @@ def Substitution.codomain {sig : Signature} {X : Variables} [BEq X] : Substituti
     | Substitution.empty => ∅
     | Substitution.cons σ _ a => a.freeVars ∪ Substitution.codomain σ
 
-mutual
-    @[simp]
-    def Term.substitute {sig : Signature} {X: Variables} [BEq X]
-                    (σ: Substitution sig X) : @Term sig X -> Term sig X
-        | Term.var x => σ.apply x
-        | Term.func f args => Term.func f $ substitute_args σ args
-    def substitute_args {sig : Signature} {X: Variables} [BEq X]
-                    (σ: Substitution sig X) : List (@Term sig X) -> List (@Term sig X)
-        | [] => []
-        | x :: xs => Term.substitute σ x :: substitute_args σ xs
-end
+
+@[simp]
+def Term.substitute {sig : Signature} {X: Variables} [BEq X]
+                (σ: Substitution sig X) : @Term sig X -> Term sig X
+    | Term.var x => σ.apply x
+    | Term.func f args => Term.func f $ args.attach.map (λ ⟨a, _⟩ => a.substitute σ)
+
 
 
 /-
@@ -133,18 +129,11 @@ def Assignment.modify {X: Variables} {univ: Universes} [BEq X]
                       (β: Assignment X univ) (x: X) (a: univ) : Assignment X univ :=
     λ y => if y == x then a else β y
 
-mutual -- this is just to persuade lean of the termination
-    @[simp]
-    def Term.eval {sig: Signature} {X: Variables}
-                (I: Interpretation sig) (β: Assignment X I.univ) : @Term sig X -> I.univ
-        | Term.var x => β x
-        | Term.func f args => (I.functions f) $ eval_subterm I β args
-    @[simp]
-    def eval_subterm {sig: Signature} {X: Variables}
-                (I: Interpretation sig) (β: Assignment X I.univ) : List (@Term sig X) -> List I.univ
-        | [] => []
-        | x :: xs => (Term.eval I β x) :: eval_subterm I β xs
-end
+@[simp]
+def Term.eval {sig: Signature} {X: Variables}
+            (I: Interpretation sig) (β: Assignment X I.univ) : @Term sig X -> I.univ
+    | Term.var x => β x
+    | Term.func f args => (I.functions f) $ args.attach.map (λ ⟨a, _⟩ => Term.eval I β a)
 
 
 @[simp]
@@ -329,18 +318,11 @@ def ClauseSetSatisfiable {sig : Signature} {X : Variables} [BEq X]
 ### 3.3.4 Substitution Lemma
 - do it later maybe
 -/
-mutual
-    def Term.compose {sig : Signature} {X : Variables} [BEq X]
-                        (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) : I.univ :=
-                match t with
-                | Term.var x => Term.eval I β (σ.apply x)
-                | Term.func f args => I.functions f $ compose_args I β σ args
-    def compose_args {sig : Signature} {X : Variables} [BEq X]
-                 (I : Interpretation sig) (β: Assignment X I.univ)
-                 (σ: Substitution sig X) : List (Term sig X) -> List (I.univ)
-                    | [] => []
-                    | x :: xs => Term.compose I β σ x :: (compose_args I β σ xs)
-end
+def Term.compose {sig : Signature} {X : Variables} [BEq X]
+                    (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) : I.univ :=
+            match t with
+            | Term.var x => Term.eval I β (σ.apply x)
+            | Term.func f args => I.functions f $ args.attach.map (λ ⟨a, _⟩ => Term.compose I β σ a)
 
 theorem substitution_lemma {sig : Signature} {X : Variables} [BEq X]
                            (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) :
