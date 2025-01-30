@@ -404,7 +404,10 @@ structure Proof {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) w
     Conclusion : Formula sig X
     Formulas : List (Formula sig X)
     FormulasNonEmpty : Formulas ≠ ∅
-    LastFormulaIsConclusion : Formulas.getLast FormulasNonEmpty = Conclusion
+    LastFormulaIsConclusion : Formulas[Formulas.length - 1]'(by
+        have hlennonzero : Formulas.length ≠ 0 := by
+            simp_all only [List.empty_eq, ne_eq, List.length_eq_zero, not_false_eq_true]
+        exact Nat.sub_one_lt hlennonzero) = Conclusion
     IsValid : ∀ i (hindex : i < Formulas.length),
         Formulas[i] ∈ Assumptions ∨
         ∃ inference ∈ Γ.Inferences,
@@ -446,26 +449,30 @@ theorem soundness_definitions_are_equivalent {sig : Signature} {X : Variables} [
                 rw [heq]
                 exact hjtrue
         intro F hF
-        have hfindex : ∃ (i : ℕ) (hindex : i < proof.Formulas.length), F = proof.Formulas[i] := by
-            sorry
+        have hfindex : ∃ (i : ℕ) (hindex : i < proof.Formulas.length), proof.Formulas[i] = F := List.mem_iff_getElem.mp (hF)
         aesop
-    have hlen : proof.Formulas.length - 1 < proof.Formulas.length := sorry
+    have hlen : proof.Formulas.length - 1 < proof.Formulas.length := by
+        have hlennonzero : proof.Formulas.length ≠ 0 := by
+            have hnonempty := proof.FormulasNonEmpty
+            simp_all only [List.empty_eq, ne_eq, List.length_eq_zero, not_false_eq_true]
+        exact Nat.sub_one_lt hlennonzero
     have hfconclusion := proof.IsValid (proof.Formulas.length - 1) hlen
-    have hfislast : proof.Formulas[proof.Formulas.length - 1] = F := sorry
+    have hfislast : proof.Formulas[proof.Formulas.length - 1] = F := by
+        rw [proof.LastFormulaIsConclusion, hconclusion]
     rw [hfislast] at hfconclusion
     rcases hfconclusion with hl | hr
     · aesop
-    subst hassumptions hconclusion
-    obtain ⟨inference, h⟩ := hr
-    obtain ⟨hinf, right⟩ := h
-    obtain ⟨hconcs, hforms⟩ := right
-    have h := hsound inference hinf
-    rw [hconcs]
-    apply h
-    intro G hgprem
-    have hinf := hforms G hgprem
-    rcases hinf with ⟨j, hjnotconc, hginforms⟩
-    aesop
+    · subst hassumptions hconclusion
+      obtain ⟨inference, h⟩ := hr
+      obtain ⟨hinf, right⟩ := h
+      obtain ⟨hconcs, hforms⟩ := right
+      have h := hsound inference hinf
+      rw [hconcs]
+      apply h
+      intro G hgprem
+      have hinf := hforms G hgprem
+      rcases hinf with ⟨j, hjnotconc, hginforms⟩
+      aesop
 
 /-
 ### 3.8 Ground (or Propositional) Resolution
