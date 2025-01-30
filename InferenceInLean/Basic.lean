@@ -25,6 +25,30 @@ inductive Term (sig : Signature) (X : Variables) where
     | func (f: sig.funs)
            (args: List (Term sig X))
 
+-- original attempt to define an induction schema - however, this one is useless
+--lemma Term.induction {sig : Signature} {X : Variables} (P : (Term sig X) → Prop) (base : ∀ x : X, P (var x)) (step : (ih : ∀ x : X, P (var x)) → ∀ (f : sig.funs) (args : List (Term sig X)), P (func f args)) : ∀ (t : Term sig X), P t := by
+    --intro t
+    --match t with
+    --| var y => exact base y
+    --| func f args => exact step base f args
+
+-- We don't get induction for nested inductive types, so we need to define the scheme manually
+lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Prop} (base : ∀ x : X, P (var x))
+                      (step : ∀ (args : List (Term sig X)), (ih : ∀ term ∈ args, P term) → ∀ (f : sig.funs), P (func f args))
+                      : ∀ (t : Term sig X), P t := by
+                        intro t
+                        match t with
+                        | var x => aesop
+                        | func f args =>
+                            apply step
+                            intro term harg
+                            apply Term.induction
+                            · exact base
+                            · intro args' ih f'
+                              apply step
+                              intro term' harg'
+                              exact ih term' harg'
+
 def Term.freeVars {sig : Signature} {X: Variables} : @Term sig X -> Set X
     | .var x => {x}
     | .func _ [] => ∅
@@ -70,6 +94,7 @@ inductive Substitution (sig : Signature) (X : Variables) where
     | empty : Substitution sig X
     | cons : Substitution sig X -> X -> Term sig X -> Substitution sig X
 
+@[simp]
 def Substitution.apply {sig : Signature} {X : Variables} [BEq X] :=
     λ (σ: Substitution sig X) (x: X) => match σ with
         | Substitution.empty => Term.var x
@@ -78,6 +103,7 @@ def Substitution.apply {sig : Signature} {X : Variables} [BEq X] :=
 /-This is basically wrapping the cons constructor. Due to the list-like nature this
 does remove the old substitution of x.
 This could be rewritten to actually build a new substitution but that seems overkill.-/
+@[simp]
 def Substitution.modify {sig : Signature} {X : Variables} [BEq X]
        (σ: Substitution sig X) (x: X) (a: Term sig X) : Substitution sig X :=
         Substitution.cons σ x a
@@ -162,7 +188,7 @@ def Formula.eval {sig: Signature} {X: Variables} [BEq X]
     | Formula.all x f => ∀ a : I.univ, Formula.eval I (β.modify x a) f
     | Formula.ex x f => ∃ a : I.univ, Formula.eval I (β.modify x a) f
 
-
+@[simp]
 def Formula.freeVars {sig : Signature} {X: Variables} : @Formula sig X -> Set X
     | Formula.falsum => ∅
     | Formula.verum => ∅
@@ -318,6 +344,7 @@ def ClauseSetSatisfiable {sig : Signature} {X : Variables} [BEq X]
 ### 3.3.4 Substitution Lemma
 - do it later maybe
 -/
+@[simp]
 def Term.compose {sig : Signature} {X : Variables} [BEq X]
                     (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) : I.univ :=
             match t with
@@ -327,8 +354,30 @@ def Term.compose {sig : Signature} {X : Variables} [BEq X]
 theorem substitution_lemma {sig : Signature} {X : Variables} [BEq X]
                            (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) :
                            Term.eval I β (t.substitute σ) = Term.compose I β σ t := by
-                            sorry
+                            match t with
+                            | .var x => aesop
+                            | .func f args =>
+                                simp_all
+                                have hargsareequal : List.map (Term.eval I β ∘ Term.substitute σ) args = List.map (Term.compose I β σ) args := by
+                                    simp_all only [List.map_inj_left, Function.comp_apply]
+                                    intro t hargs
+                                    have h := substitution_lemma I β σ t
+                                    simp_all only
+                                rw [hargsareequal]
 
+-- equivalent proof to show that the induction lemma we defined for terms actually works
+theorem substitution_lemma' {sig : Signature} {X : Variables} [BEq X]
+                           (I : Interpretation sig) (β: Assignment X I.univ) (σ: Substitution sig X) (t : Term sig X) :
+                           Term.eval I β (t.substitute σ) = Term.compose I β σ t := by
+                            induction' t using Term.induction with x args ih f
+                            ·   aesop
+                            ·   rw [Term.compose, Term.substitute]
+                                simp only [List.map_subtype, List.unattach_attach, Term.eval,
+                                  List.mem_map, forall_exists_index, and_imp,
+                                  forall_apply_eq_imp_iff₂, List.map_map]
+                                have hargsarequal : List.map (Term.compose I β σ) args = List.map (Term.eval I β ∘ Term.substitute σ) args := by
+                                    simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
+                                rw [hargsarequal]
 
 /-
 ### 3.7 Inference Systems and Proofs
