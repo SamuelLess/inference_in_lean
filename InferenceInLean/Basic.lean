@@ -99,8 +99,60 @@ def Term.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) 
 @[simp]
 def Substitution.compose {sig : Signature} {X : Variables} (σ τ: Substitution sig X) :
     Substitution sig X :=
-  fun x => (σ x).substitute τ
+  fun x => (τ x).substitute σ
+infix:90 " ∘ " => Substitution.compose
 
+def Substitution.domain {sig : Signature} {X : Variables} (σ : Substitution sig X) : Set X :=
+  {x : X | σ x ≠ Term.var x}
+
+def Substitution.codomain {sig : Signature} {X : Variables} (σ : Substitution sig X) : Set X :=
+  {x : X | ∃ y : X, y ∈ σ.domain ∧ x ∈ (σ y).freeVars}
+
+@[simp]
+def MoreGeneral {sig : Signature} {X : Variables} [BEq X] (σ τ : Substitution sig X) : Prop :=
+  ∃ ρ : Substitution sig X, ρ ∘ σ = τ
+infix:50 " ≤ " => MoreGeneral
+
+def example_subst : Substitution (Signature.mk String String) String :=
+  fun x => if x == "z" then Term.func "f" [Term.var "y"] else Term.var x
+def example_subst' : Substitution (Signature.mk String String) String :=
+  fun x => if x == "z" then Term.func "f" [Term.var "z"] else
+    if x == "y" then Term.var "z" else Term.var x
+
+theorem example_more_general : example_subst ≤ example_subst' := by
+  use fun x => if x == "y" then Term.var "z" else Term.var x
+  funext x
+  simp [example_subst, example_subst']
+  by_cases hx : x = "z" <;> by_cases hy : x = "y" <;> simp [hx, hy]
+
+def Idempotent {sig : Signature} {X : Variables} [BEq X] (σ : Substitution sig X) : Prop :=
+  σ ∘ σ = σ
+
+theorem idempotent_iff_empty_interesec {sig : Signature} {X : Variables} [BEq X]
+    (σ : Substitution sig X) : Idempotent σ ↔ σ.domain ∩ σ.codomain = ∅ := by
+  -- Construct the equivalence by proving both directions.
+  apply Iff.intro
+  -- Forward direction: If σ is idempotent, then its domain and codomain are disjoint.
+  · intro h
+    ext x
+    -- Simplify the membership conditions for the intersection of domain and codomain.
+    simp only [Set.mem_inter_iff, Set.mem_setOf_eq, Set.mem_empty_iff_false, iff_false]
+    -- Introduce a helper lemma to handle the case where x is in both domain and codomain.
+    intro ⟨hxdom, hxcodom⟩
+    -- Use the idempotence property to derive a contradiction.
+    have h1 := congr_fun h x
+    simp [Substitution.domain] at hxdom
+    simp [Substitution.codomain] at hxcodom
+    obtain ⟨y, ⟨hy, hxy⟩⟩ := hxcodom
+    -- σ={x ↦ y, z ↦ x} => σ.dom = {x, z}, σ.codom = {y, x} => x ∈ σ.codom
+    -- x maps to something that is not x
+    -- something maps to x
+    -- so applying once
+    -- use that σ z != (σ ∘ σ) z
+    sorry
+  -- Reverse direction: If the domain and codomain are disjoint, then σ is idempotent.
+  · intro h
+    sorry
 
 /-
 ## 3.2 Semantics
@@ -234,6 +286,7 @@ F ⊨ G, if for all A ∈ Σ-Alg and β ∈ X → UA, we have A, β |= F ⇒ A, 
 def Entails {sig : Signature} {X : Variables} [BEq X] (F G : @Formula sig X) : Prop :=
   ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
     EntailsInterpret I β F → EntailsInterpret I β G
+infix:60 " ⊨ " => Entails
 
 
 /-
@@ -243,7 +296,7 @@ def Entails {sig : Signature} {X : Variables} [BEq X] (F G : @Formula sig X) : P
 > F ⊨ G if and only if F → G is valid`
 -/
 theorem entails_iff_imp_valid {sig : Signature} {X : Variables} [inst : BEq X]
-    (F G : Formula sig X) : Entails F G ↔ @Valid sig X inst (Formula.imp F G) :=
+    (F G : Formula sig X) : F ⊨ G ↔ @Valid sig X inst (Formula.imp F G) :=
   Eq.to_iff rfl
 
 
@@ -257,6 +310,13 @@ def Satisfiable {sig : Signature} {X : Variables} [BEq X] (F : @Formula sig X) :
 @[simp]
 def Unsatisfiable {sig : Signature} {X : Variables} [BEq X] (F : @Formula sig X) : Prop :=
   ¬Satisfiable F
+
+theorem valid_iff_not_unsat {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula sig X) :
+    Valid F ↔ @Unsatisfiable sig X inst (Formula.neg F) := by simp
+
+theorem entails_iff_and_not_unsat {sig : Signature} {X : Variables} [inst : BEq X]
+    (F G : Formula sig X) :
+    Entails F G ↔ @Unsatisfiable sig X inst (Formula.and F (Formula.neg G)) := by simp
 
 /-
 Expand this to sets of Formulas
@@ -288,6 +348,11 @@ lemma sat_as_set_sat {sig : Signature} {X : Variables} [inst : BEq X] (F : Formu
 lemma unsat_as_set_unsat {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula sig X) :
     Unsatisfiable F → @SetUnsatisfiable sig X inst {F} := by simp
 
+theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst : BEq X]
+    (N : Set $ Formula sig X) (G : Formula sig X) :
+    SetEntails N G ↔ @SetUnsatisfiable sig X inst (N ∪ {Formula.neg G}) := by
+        sorry
+
 /-Expand this to Literals and Clauses-/
 def Literal.satisfied_by {sig : Signature} {X: Variables} [BEq X]
     (L : Literal sig X) (I : @Interpretation sig) (β : Assignment X I.univ) : Prop :=
@@ -308,24 +373,24 @@ def ClauseSetSatisfiable {sig : Signature} {X : Variables} [BEq X]
 - do it later maybe
 -/
 @[simp]
-def Term.compose {sig : Signature} {X : Variables} [BEq X]
+def Assignment.compose {sig : Signature} {X : Variables} [BEq X]
     (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
     I.univ :=
   match t with
     | Term.var x => Term.eval I β (σ x)
-    | Term.func f args => I.functions f <| args.attach.map (fun ⟨a, _⟩ => Term.compose I β σ a)
+    | Term.func f args => I.functions f <| args.attach.map (fun ⟨a, _⟩ => Assignment.compose I β σ a)
 
 theorem substitution_lemma {sig : Signature} {X : Variables} [BEq X]
     (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
-    Term.eval I β (t.substitute σ) = Term.compose I β σ t := by
+    Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
   match t with
     | .var x => aesop
     | .func f args =>
       simp only [Term.substitute, List.map_subtype, List.unattach_attach, Term.eval,
         List.mem_map, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, List.map_map,
-        Term.compose]
+        Assignment.compose]
       have hargsareequal :
-          List.map (Term.eval I β ∘ .substitute σ) args = .map (Term.compose I β σ) args := by
+          List.map (Term.eval I β ∘ .substitute σ) args = .map (Assignment.compose I β σ) args := by
         simp only [List.map_inj_left, Function.comp_apply]
         intro t hargs
         have h := substitution_lemma I β σ t
@@ -335,15 +400,15 @@ theorem substitution_lemma {sig : Signature} {X : Variables} [BEq X]
 -- equivalent proof to show that the induction lemma we defined for terms actually works
 theorem substitution_lemma' {sig : Signature} {X : Variables} [BEq X]
     (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
-    Term.eval I β (t.substitute σ) = Term.compose I β σ t := by
+    Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
   induction' t using Term.induction with x args ih f
-  · simp only [Term.substitute, Term.compose]
-  · rw [Term.compose, Term.substitute]
+  · simp only [Term.substitute, Assignment.compose]
+  · rw [Assignment.compose, Term.substitute]
     simp only [List.map_subtype, List.unattach_attach, Term.eval,
       List.mem_map, forall_exists_index, and_imp,
       forall_apply_eq_imp_iff₂, List.map_map]
     have hargsarequal :
-        List.map (Term.compose I β σ) args = .map (Term.eval I β ∘ .substitute σ) args := by
+        List.map (Assignment.compose I β σ) args = .map (Term.eval I β ∘ .substitute σ) args := by
       simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
     rw [hargsarequal]
 
@@ -368,9 +433,14 @@ def EqualityProblem (sig : Signature) (X : Variables) :=
 instance {sig : Signature} {X : Variables} : Membership (Equality sig X) (EqualityProblem sig X) :=
   List.instMembership
 
+def EqualityProblem.freeVars {sig : Signature} {X : Variables} :
+    @EqualityProblem sig X -> Set X
+  | [] => ∅
+  | (lhs, rhs) :: eqs => Term.freeVars lhs ∪ Term.freeVars rhs ∪ freeVars eqs
+
 @[simp]
 def Unifier {sig : Signature} {X : Variables} [BEq X]
-    (E : @EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
+    (E : EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
   ∀ eq ∈ E, have ⟨lhs, rhs⟩ := eq; lhs.substitute σ = rhs.substitute σ
 
 def example_unification_problem : EqualityProblem (Signature.mk String String) String :=
@@ -380,12 +450,29 @@ def example_unifier : Substitution (Signature.mk String String) String :=
   fun x => if x == "y" then Term.func "f" [Term.var "x"] else Term.var x
 
 theorem example_unification : Unifier example_unification_problem example_unifier := by
-  simp [example_unification_problem]
-  unfold example_unifier
-  simp
+  simp [example_unification_problem, example_unifier]
 
-def MoreGeneral {sig : Signature} {X : Variables} [BEq X] (σ τ : Substitution sig X) : Prop :=
-  ∃ ρ : Substitution sig X, σ = ρ.compose τ
+@[simp]
+def MostGeneralUnifier {sig : Signature} {X : Variables} [BEq X]
+    (E : EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
+  Unifier E σ ∧ (∀ τ : Substitution sig X, Unifier E τ → σ ≤ τ)
+
+lemma mgu_imp_unifier {sig : Signature} {X : Variables} [BEq X] (E : EqualityProblem sig X)
+    (σ : Substitution sig X) : MostGeneralUnifier E σ → Unifier E σ := fun ⟨h, _⟩ => h
+
+@[simp]
+def Unifiable {sig : Signature} {X : Variables} [BEq X] (E : EqualityProblem sig X) : Prop :=
+  ∃ σ : Substitution sig X, Unifier E σ
+
+theorem unifiable_iff_mgu_idempot {sig : Signature} {X : Variables} [inst : BEq X]
+    (E : EqualityProblem sig X) : Unifiable E ↔ ∃ σ : Substitution sig X,
+      MostGeneralUnifier E σ ∧ Idempotent σ ∧ σ.domain ∪ σ.codomain ⊆ E.freeVars := by
+  apply Iff.intro
+  · sorry
+  · intro h
+    obtain ⟨σ, ⟨⟨⟩⟩⟩ := h
+    use σ
+alias main_unification_theorem := unifiable_iff_mgu_idempot
 
 
 /-
