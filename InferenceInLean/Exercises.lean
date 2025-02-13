@@ -53,16 +53,14 @@ def example_substitution : Substitution ex_sig_peano String := λ x => match x w
 def ex_formula_peano_lt : @Formula ex_sig_peano String :=
   .all "z" (.atom $ .pred .less_than [.var "x", .func .succ [.func .succ [.var "z"]]])
 
-lemma ex_proof_lt : @Formula.eval ex_sig_peano String
-    (@instBEqOfDecidableEq String instDecidableEqString)
+lemma ex_proof_lt : @Formula.eval ex_sig_peano String instDecidableEqString
     ex_interpret_peano ex_assig_peano ex_formula_peano_lt := by
   simp [ex_formula_peano_lt, ex_sig_peano, Interpretation, Assignment, ex_assig_peano]
 
 noncomputable def ex_formula_peano_lt_subst : @Formula ex_sig_peano String :=
   ex_formula_peano_lt.substitute example_substitution
 
-lemma ex_proof_lt_subst : @Formula.eval ex_sig_peano String
-    (@instBEqOfDecidableEq String instDecidableEqString)
+lemma ex_proof_lt_subst : @Formula.eval ex_sig_peano String instDecidableEqString
     ex_interpret_peano ex_assig_peano ex_formula_peano_lt_subst := by
   simp only [ex_sig_peano, ex_interpret_peano, ex_formula_peano_lt_subst]
   unfold example_substitution
@@ -77,8 +75,7 @@ def ex_term_peano : Term ex_sig_peano String :=
 
 #eval @Term.eval ex_sig_peano String ex_interpret_peano ex_assig_peano ex_term_peano
 
-lemma ex_peano_proof: @Formula.eval ex_sig_peano String
-    (@instBEqOfDecidableEq String instDecidableEqString)
+lemma ex_peano_proof: @Formula.eval ex_sig_peano String instDecidableEqString
     ex_interpret_peano ex_assig_peano ex_formula_peano := by
   simp
   intro a b
@@ -110,10 +107,10 @@ Proposition 3.3.3 Let F and G be formulas, let N be a set of formulas. Then
 (i) F is valid if and only if ¬F is unsatisfiable.
 (ii) F |= G if and only if F ∧ ¬G is unsatisfiable.
 -/
-theorem valid_iff_not_unsat {sig : Signature} {X : Variables} [inst : BEq X] (F : Formula sig X) :
-    Valid F ↔ @Unsatisfiable sig X inst (Formula.neg F) := by simp
+theorem valid_iff_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (F : Formula sig X) : Valid F ↔ @Unsatisfiable sig X inst (Formula.neg F) := by simp
 
-theorem entails_iff_and_not_unsat {sig : Signature} {X : Variables} [inst : BEq X]
+theorem entails_iff_and_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (F G : Formula sig X) :
     Entails F G ↔ @Unsatisfiable sig X inst (Formula.and F (Formula.neg G)) := by simp
 
@@ -121,10 +118,21 @@ theorem entails_iff_and_not_unsat {sig : Signature} {X : Variables} [inst : BEq 
 -- TODO: finish this proof
 (iii) N |= G if and only if N ∪ {¬G} is unsatisfiable.
 -/
-theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst : BEq X]
+theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (N : Set $ Formula sig X) (G : Formula sig X) :
     SetEntails N G ↔ @SetUnsatisfiable sig X inst (N ∪ {Formula.neg G}) := by
-        sorry
+  apply Iff.intro
+  · intro hentails I β
+    simp_all only [SetEntails, Assignment, EntailsInterpret, Set.union_singleton,
+      Set.mem_insert_iff, exists_eq_or_imp, Formula.eval, not_not]
+    specialize hentails I β
+    generalize Formula.eval I β G = pro at *
+    by_cases halltrue : ∀ G ∈ N, Formula.eval I β G <;> aesop
+  · intro hunsat
+    intro I β hgstrue
+    specialize hunsat I β
+    aesop
+
 
 /-
 Exercise 4.7 (*)
@@ -134,7 +142,7 @@ literals. Prove: If every clause in N contains at least one literal L with L ∈
 clause in N' contains a literal L with L ∈ S, then N ∪ N' is satisfiable if and only if N'
 is satisfiable.
 -/
-theorem ex_4_7 {sig : Signature} {X : Variables} [BEq X]
+theorem ex_4_7 {sig : Signature} {X : Variables} [DecidableEq X]
     (N N' : Set $ Clause sig X) (S : Set $ Literal sig X)
     (hSnoCompl : ∀ L ∈ S, L.comp ∉ S)
     (hNsatByS : ∀ C ∈ N, ∃ L ∈ C, L ∈ S) (hN'noComplS : ∀ C ∈ N', ∀ L ∈ C, L ∉ S) :
