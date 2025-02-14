@@ -32,7 +32,7 @@ lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Pro
     ∀ (t : Term sig X), P t := by
   intro t
   match t with
-  | var x => aesop
+  | var x => simp_all only
   | func f args =>
     apply step
     intro term harg
@@ -183,6 +183,22 @@ def Assignment (X : Variables) (univ : Universes) := X → univ
 def Assignment.modify {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (x : X) (a : univ) : Assignment X univ :=
   fun y => if y = x then a else β y
+
+-- β[x1 ↦ β(x1), ..., xn ↦ β(xn)] = β
+@[simp]
+def Assignment.modify_rfl {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (x : X) : β.modify x (β x) = β := by
+  funext y
+  rw [Assignment.modify]
+  split_ifs with heq
+  · rw [heq]
+  · rfl
+
+-- x ≠ y → β[x ↦ a, y ↦ b] = β[y ↦ b, x ↦ a]
+def Assignment.modify_comm {X : Variables} {univ : Universes} [DecidableEq X]
+    {β : Assignment X univ} (x y : X) (a b : univ) :
+    x ≠ y → (β.modify x a).modify y b = (β.modify y b).modify x a := by
+  aesop
 
 @[simp]
 def Term.eval {sig : Signature} {X : Variables}
@@ -385,7 +401,7 @@ theorem substitution_lemma {sig : Signature} {X : Variables} [DecidableEq X]
     (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
     Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
   match t with
-  | .var x => aesop
+  | .var x => simp_all only [Term.substitute, Assignment.compose]
   | .func f args =>
     simp only [Term.substitute, List.map_subtype, List.unattach_attach, Term.eval,
       List.mem_map, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, List.map_map,
@@ -416,90 +432,268 @@ theorem substitution_lemma' {sig : Signature} {X : Variables} [DecidableEq X]
 
 -- for variables x_1,...,x_n and formula F, this returns ∀ x_1 ... x_n, F
 @[simp]
-def Formula.BigForall {sig : Signature} {X : Variables} [DecidableEq X]
+def Formula.bigForall {sig : Signature} {X : Variables} [DecidableEq X]
     (xs : List X) (F : Formula sig X) : Formula sig X :=
   match xs with
   | [] => F
-  | x :: xs => .all x (Formula.BigForall xs F)
+  | x :: xs => .all x (F.bigForall xs)
+
+-- β[x1 ↦ a1, ..., xn ↦ an]
+@[simp]
+def Assignment.bigModify {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (as : List univ) :
+    Assignment X univ :=
+  match xs, as with
+  | x :: xs, a :: as => Assignment.bigModify (β.modify x a) xs as
+  | _, _ => β
+
+-- β[] = β
+@[simp]
+lemma Assignment.bigModify_empty {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) : β.bigModify [] [] = β := rfl
+
+-- β[x ↦ a, x1 ↦ a1, ..., xn ↦ xn] (x) = a
+@[simp]
+lemma Assignment.bigModify_single_eq {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (huniq : xs.Nodup) (as : List univ)
+    (hlen : xs.length = as.length) (x : X) (a : univ) (hx : x ∉ xs) :
+    (β.modify x a).bigModify xs as x = a := by
+  induction' xs with y xs ih generalizing β as x a
+  · simp_all only [List.nodup_nil, List.length_nil, bigModify, modify, ↓reduceIte]
+  · match as with
+    | [] => simp_all only [Assignment, List.nodup_cons, List.length_cons,
+      List.length_nil, Nat.add_one_ne_zero]
+    | b :: as =>
+      rw [Assignment.bigModify]
+      rw [Assignment.modify_comm x y a b (List.ne_of_not_mem_cons hx)]
+      exact ih (β.modify y b) (List.Nodup.of_cons huniq) as
+        (Nat.succ_inj'.mp hlen) x a (by exact List.not_mem_of_not_mem_cons hx)
+
+lemma Assignment.bigModify_index {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (y : X) (hmem : y ∈ xs) (hnempty : xs ≠ [])
+    (as : List univ) (hlen : xs.length = as.length) (huniq : xs.Nodup) :
+    ∃ (i : ℕ) (hiinbounds : i < xs.length),
+      xs[i] = y ∧ β.bigModify xs as y = as[i] := by
+  have hexists := List.mem_iff_getElem.mp hmem
+  rcases hexists with ⟨i, ⟨hiinbounds, heq⟩⟩
+  use i
+  use hiinbounds
+  subst heq
+  simp_all only [List.getElem_mem, true_and]
+  sorry
+
+-- y ∉ [x1, ..., xn] → β[x1 ↦ a1, ..., xn ↦ an] y = β y
+@[simp]
+lemma Assignment.bigModify_nonmem {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (y : X) (hnonmem : y ∉ xs)
+    (as : List univ) (hlen : xs.length = as.length) :
+    β.bigModify xs as y = β y := by
+  induction' xs with x xs ih generalizing as β
+  · rw [Assignment.bigModify]
+    aesop
+  · match as with
+    | [] => simp_all only [List.mem_cons, not_or, List.length_cons, List.length_nil,
+      Nat.add_one_ne_zero]
+    | a :: as =>
+      rw [Assignment.bigModify]
+      simp_all only [List.length_cons, Nat.add_right_cancel_iff, modify, ↓reduceIte]
+      specialize ih (β.modify x a) (List.not_mem_of_not_mem_cons hnonmem) as rfl
+      rw [ih]
+      simp_all only [List.mem_cons, not_or, modify, ↓reduceIte]
+
+lemma Assignment.bigModify_sur {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (huniq : xs.Nodup) (as : List univ)
+    (a : univ) (ha : a ∈ as) (hlen : xs.length = as.length) :
+    ∃ (x : X) (hx : x ∈ xs), β.bigModify xs as x = a := by
+  induction' xs with x xs ih generalizing β as
+  · match as with
+    | [] => simp_all only [List.nodup_nil, List.not_mem_nil]
+    | a' :: as' => simp_all only [List.nodup_nil, List.mem_cons, List.length_nil,
+      List.length_cons, Nat.self_eq_add_left, Nat.add_one_ne_zero]
+  · match as with
+    | [] => simp_all only [Assignment, exists_prop, List.nodup_cons, List.not_mem_nil]
+    | a' :: as' =>
+      rw [Assignment.bigModify]
+      apply List.mem_cons.mp at ha
+      rcases ha with hfirst | has'
+      · use x
+        use (List.mem_cons_self x xs)
+        rw [← hfirst]
+        exact bigModify_single_eq
+          β xs (List.Nodup.of_cons huniq) as' (Nat.succ_inj'.mp hlen) x a (List.Nodup.not_mem huniq)
+      · specialize ih (β.modify x a') (List.Nodup.of_cons huniq) as' (has') (Nat.succ_inj'.mp hlen)
+        rcases ih with ⟨x', ⟨hxinbounds, h⟩⟩
+        use x'
+        use (List.mem_cons_of_mem x hxinbounds)
+
+lemma List.nodup_index_unique {α} [DecidableEq α] {l : List α} (huniq : l.Nodup)
+    (a : α) (ha : a ∈ l) :
+    ∃ (i : ℕ) (hinbounds : i < l.length),
+      l[i] = a ∧
+      l[l.indexOf a]'(List.indexOf_lt_length.mpr ha) = a ∧
+      ∀ (j : ℕ) (hjinbounds : j < l.length), l[j] = a → i = j := by
+  have h := List.mem_iff_getElem.mp ha
+  rcases h with ⟨i, ⟨hinbounds, hmem⟩⟩
+  use i
+  use hinbounds
+  subst hmem
+  simp_all only [ne_eq, List.getElem_mem, true_and]
+  split_ands
+  · exact List.getElem_indexOf (List.indexOf_lt_length.mpr ha)
+  · intro j hjinbounds heq
+    exact (List.Nodup.getElem_inj_iff huniq).mp (id (Eq.symm heq))
+
+-- β[x1 ↦ a1, ..., xi ↦ ai, ..., xn ↦ an] (xi) = ai
+lemma Assignment.bigModify_single_index {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (huniq : xs.Nodup) (as : List univ)
+    (n : ℕ) (hn : n = xs.length) (hnempty : xs ≠ []) (hlen : xs.length = as.length)
+    (i : ℕ) (hiinbounds : i < xs.length) :
+    β.bigModify xs as xs[i] = as[i] := by
+  induction' n with n ih generalizing β xs as i
+  · have hx : xs = [] := List.length_eq_zero.mp (id (Eq.symm hn))
+    exact False.elim (hnempty hx)
+  · match xs, as with
+    | x :: xs, a :: as =>
+      rw [Assignment.bigModify]
+      specialize ih (β.modify x a) xs (by aesop) as (by aesop) sorry (by aesop) (i - 1) sorry
+      induction' i using Nat.strong_induction_on with i ih'
+      sorry
+
+    | _, _ => sorry
+/-
+  induction' n with n ih generalizing β xs as i
+  · have h : xs = [] := by exact List.length_eq_zero.mp (id (Eq.symm hn))
+    exact False.elim (hnempty h)
+  · match xs, as with
+    | x :: xs, a :: as =>
+      rw [Assignment.bigModify] -/
+/-       by_cases hi : i = 0
+      · simp_all
+        subst hn
+        simp_all only [List.length_cons, Nat.zero_lt_succ, not_false_eq_true]
+        obtain ⟨left, right⟩ := huniq
+        exact bigModify_single_eq β xs right as (Nat.succ_inj'.mp hlen) x a left
+      · have hxsnempty : xs ≠ [] := by
+          intro hempty
+          subst hempty
+          have hizero : i = 0 := by exact Nat.lt_one_iff.mp hiinbounds
+          exact hi hizero
+        specialize ih (β) (xs) huniq (as) (sorry) hnempty hlen i hiinbounds
+        rw [bigModify] at ih
+        simp_all only [List.nodup_cons, List.length_cons, Nat.add_right_cancel_iff,
+          ne_eq, reduceCtorEq, not_false_eq_true, bigModify] -/
+    --| [], [] => simp_all only [Assignment, List.nodup_nil, List.length_nil, Nat.add_one_ne_zero]
+
+#check List.nodup_index_unique
+lemma Assignment.bigModify_mem {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (n : ℕ) (hn : n = xs.length) (hnempty : xs ≠ [])
+    (as : List univ) (hlen : xs.length = as.length) (huniq : xs.Nodup) :
+    ∀ (y : X) (hmem : y ∈ xs),
+      β.bigModify xs as y = as[List.indexOf y xs]'(by
+        rw [← hlen]
+        exact List.indexOf_lt_length.mpr hmem
+      ) := by
+  intro y hmem
+  simp [List.indexOf, List.findIdx]
+  induction' n with n ih generalizing β xs as
+  · have h : xs = [] := by exact List.length_eq_zero.mp (id (Eq.symm hn))
+    exact False.elim (hnempty h)
+  · match xs, as with
+    | [], [] => simp_all only [Assignment, List.length_nil, Nat.add_one_ne_zero]
+    | x :: xs, a :: as =>
+      simp only [List.findIdx.go, Assignment.bigModify]
+      by_cases heq : x == y
+      · simp_all only [List.length_cons, Nat.add_right_cancel_iff, beq_iff_eq,
+          beq_self_eq_true, Nat.zero_add]
+        simp only [cond_true, List.getElem_cons_zero]
+        subst heq hn
+        exact bigModify_single_eq β xs
+          (List.Nodup.of_cons huniq) as (Nat.succ_inj'.mp hlen) x a (List.Nodup.not_mem huniq)
+      · specialize ih (β.modify x a) xs
+          (by aesop) (by aesop) as (Nat.succ_inj'.mp hlen) (List.Nodup.of_cons huniq) (by aesop)
+        simp_all only [List.length_cons, Nat.add_right_cancel_iff, Nat.zero_add, cond_false]
+        subst hn
+        sorry
+
+-- An alternative way to formalize expressions of the form β[x1 ↦ a1, ..., xn ↦ an]
+@[simp]
+def Assignment.modFn {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (as : List univ) (hlen : xs.length = as.length) :
+    Assignment X univ :=
+  fun x ↦ if hmem : x ∈ xs then by
+    exact as[xs.indexOf x]'(by rw [← hlen]; exact List.indexOf_lt_length.mpr hmem)
+  else β x
 
 @[simp]
-def BigModify {X : Variables} {univ : Universes} [DecidableEq X]
-    (β : Assignment X univ) (modifications : List (X × univ)) : Assignment X univ :=
-  match modifications with
-  | [] => β
-  | (x, a) :: modifications => BigModify (β.modify x a) modifications
+lemma Assignment.modFn_empty {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) :
+    β.modFn [] [] rfl = β := rfl
+
+@[simp]
+lemma Assignment.modFn_single {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (x : X) (a : univ) :
+    β.modFn [x] [a] rfl = β.modify x a := by aesop
+
+lemma assignment_mod_eq_bigModify {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (as : List univ) (hnempty : xs ≠ [])
+    (hlen : xs.length = as.length) (huniq : xs.Nodup) :
+    β.bigModify xs as = β.modFn xs as hlen := by
+  funext y
+  rw [Assignment.modFn]
+  split_ifs with hmem
+  · exact Assignment.bigModify_mem β xs as.length (id (Eq.symm hlen)) hnempty as hlen huniq y hmem
+  · exact Assignment.bigModify_nonmem β xs y hmem as hlen
 
 /-
 ### Lemma 3.3.7
 -/
 lemma substitute_equality {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) :
-    β = BigModify β (xs.zip (xs.map β)) := by
-  have hsubeq : β = BigModify β (xs.zipWith Prod.mk (xs.map β)) := by
-    induction' xs with x xs ih
-    · aesop
-    · have hlen : xs.length = (xs.map β).length := by exact Eq.symm (List.length_map xs β)
-      rw [List.map, List.zipWith, BigModify]
-      have hsubeq : β.modify x (β x) = β := by
-        funext y
-        rw [Assignment.modify]
-        split_ifs with h
-        · rw [h]
-        · rfl
-      rw [hsubeq, ← ih]
+    β = Assignment.bigModify β xs (xs.map β) := by
   induction' xs with x xs ih
-  · aesop
-  · rw [List.zip, ← hsubeq]
+  · simp_all only [Assignment, Assignment.bigModify]
+  · rw [List.map, Assignment.bigModify, β.modify_rfl]
+    exact ih
 
-#check List.mem_iff_getElem
-#check List.Nodup
-#check List.findIdx
---lemma IndexedFinset.mem_iff_getElem {α : Type} {n : ℕ} {ifset : IndexedFinset α n}
+lemma assignment_modFn_eq_id {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (as : List univ)
+    (hlen : xs.length = as.length) (huniq : xs.Nodup) :
+    xs.map (Assignment.modFn β xs as hlen) = as := by
+  apply List.map_eq_iff.mpr
+  intro i
+  by_cases hin : i < as.length
+  · simp_all [↓reduceDIte]
+    have h : List.indexOf xs[i] xs = i := by apply List.get_indexOf huniq
+    simp_all only
+  · have hasnone : as[i]? = none := getElem?_neg as i hin
+    have hxsnone : xs[i]? = none := by simp_all only [not_lt, getElem?_eq_none]
+    rw [hasnone, hxsnone, Option.map]
 
-noncomputable def index_map {α β: Type} [DecidableEq α] (f : α → β)
-    (as : List α) (bs : List β) (hlen : as.length = bs.length):
-    α → β :=
-  fun a ↦ if hmem: a ∈ as then by
-    have hindex := List.mem_iff_getElem.mp hmem
-    let hchoice := Exists.choose_spec hindex
-    have hinbounds := Exists.choose hchoice
-    set i := hindex.choose with heq
-    rw [hlen] at hinbounds
-    exact bs[i]
-  else
-    f a
-
+--(hfree : ∀ x ∈ xs, x ∈ F.freeVars)
 lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X]
-    (F : Formula sig X) (xs : List X) (hfree : ∀ x ∈ xs, x ∈ F.freeVars):
-    Valid (Formula.BigForall xs F) ↔ Valid F := by
+    (F : Formula sig X) (xs : List X) (huniq : xs.Nodup) :
+    Valid (Formula.bigForall xs F) ↔ Valid F := by
   apply Iff.intro
   · intro hvalid I γ
     specialize hvalid I
-    have hlemma (as : List I.univ) :
-        F.eval I (BigModify γ (xs.zipWith Prod.mk as)) := by
+    have hlemma (as : List I.univ) (hlen : xs.length = as.length) :
+        F.eval I (Assignment.bigModify γ xs as) := by
+      set f := γ.modFn xs as hlen with hf
+      rw [← assignment_modFn_eq_id γ xs as hlen, ← hf]
       induction' xs with x xs ih generalizing as
-      · aesop
-      · rw [Formula.BigForall] at *
-        simp_all only [List.mem_cons, or_true, implies_true, Assignment, forall_const,
-          forall_eq_or_imp, Formula.eval]
-        obtain ⟨hfree, hallfree⟩ := hfree
-        --specialize hvalid γ
-        induction' as with a as ih' generalizing xs
-        · rw [List.zipWith]
-          · simp_all only [BigModify]
-            sorry
-          · aesop
-        · rw [List.zipWith, BigModify]
-          specialize hvalid
-          specialize ih sorry as
-          sorry
+      · simp_all only [List.nodup_nil, Assignment, Formula.bigForall, Assignment.bigModify, f]
+      · rw [Formula.bigForall] at *
+        rw [List.map, Assignment.bigModify]
+        simp_all [↓reduceDIte, f]
+        obtain ⟨left, right⟩ := huniq
+        sorry
     set as : List I.univ := List.map γ xs with has
-    have hsubequal : γ = BigModify γ (List.zip xs as) := by
+    have hsubequal : γ = Assignment.bigModify γ xs as := by
       exact substitute_equality γ xs
     rw [hsubequal]
-    apply hlemma as
+    apply hlemma as (Eq.symm (List.length_map xs γ))
   · intro hvalid I
-    induction' xs <;> aesop
+    induction' xs <;> sorry
 
 /-
 ### Unification
@@ -610,7 +804,7 @@ theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : 
         aesop
       · have hvalid := proof.is_valid (i + 1) hlen
         rcases hvalid with hassump | hconseq
-        · aesop
+        · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
         · rcases hconseq with ⟨inference, ⟨hin, ⟨hlast, hprev⟩⟩⟩
           rw [hlast]
           have hinfsound := hsound inference hin
@@ -635,7 +829,7 @@ theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : 
     rw [proof.last_formula_conclusion, hconclusion]
   rw [hfislast] at hfconclusion
   rcases hfconclusion with hl | hr
-  · aesop
+  · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
   · subst hassumptions hconclusion
     obtain ⟨inference, h⟩ := hr
     obtain ⟨hinf, right⟩ := h
@@ -646,7 +840,8 @@ theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : 
     intro G hgprem
     have hinf := hforms G hgprem
     rcases hinf with ⟨j, hjnotconc, hginforms⟩
-    aesop
+    simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret,
+      implies_true, List.getElem_mem]
 
 /-
 ### 3.8 Ground (or Propositional) Resolution
