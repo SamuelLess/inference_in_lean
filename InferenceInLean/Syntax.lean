@@ -74,6 +74,12 @@ def Clause (sig : Signature) (X : Variables) := List (Literal sig X)
 instance {sig : Signature} {X : Variables} : Membership (Literal sig X) (Clause sig X) :=
   List.instMembership
 
+instance {sig : Signature} {X : Variables} : Append (Clause sig X) :=
+  List.instAppend
+
+instance {sig : Signature} {X : Variables} : HAppend (Clause sig X) (Clause sig X) (Clause sig X) :=
+  instHAppendOfAppend
+
 inductive Formula (sig: Signature) (X: Variables) where
   | falsum
   | verum
