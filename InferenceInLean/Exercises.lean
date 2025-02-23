@@ -3,7 +3,13 @@ import Mathlib.Data.Finset.Defs
 
 set_option autoImplicit false
 
-open FirstOrder
+open Syntax
+open Semantics
+open Models
+open Unification
+open Inference
+
+namespace Examples
 
 /-
 ### Example Peano Arithmetic
@@ -191,7 +197,7 @@ def ex_conc : Clause ex_sig_ground Empty :=
 
 -- forget about that, the rules are schematic but we don't have that notion here
 def example_proof {A : @Atom ex_sig_ground Empty} {C D : @Clause ex_sig_ground Empty} :
-    @Proof ex_sig_ground Empty (@GroundResolution ex_sig_ground A D C) := {
+    @Proof ex_sig_ground Empty (@Resolution.GroundResolution ex_sig_ground A D C) := {
       assumptions := {ex_clause}
       clauses := [ex_clause, ex_conc]
       conclusion := ex_conc
