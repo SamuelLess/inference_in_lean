@@ -43,6 +43,7 @@ lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Pro
       intro term' harg'
       exact ih term' harg'
 
+@[simp]
 def Term.freeVars {sig : Signature} {X : Variables} : @Term sig X -> Set X
   | .var x => {x}
   | .func _ [] => ∅
@@ -53,6 +54,7 @@ inductive Atom (sig : Signature) (X : Variables) where
   | pred (p : sig.preds) (args : List (Term sig X))
   | eq (lhs rhs : Term sig X)
 
+@[simp]
 def Atom.freeVars {sig : Signature} {X : Variables} : @Atom sig X -> Set X
   | .pred _ args => args.foldl (fun acc t => acc ∪ Term.freeVars t) ∅
   | .eq lhs rhs => Term.freeVars lhs ∪ Term.freeVars rhs
@@ -61,10 +63,12 @@ inductive Literal (sig : Signature) (X : Variables) where
   | pos (a : @Atom sig X)
   | neg (a : @Atom sig X)
 
+@[simp]
 def Literal.comp {sig : Signature} {X : Variables} : Literal sig X -> Literal sig X
   | .pos a => .neg a
   | .neg a => .pos a
 
+@[simp]
 def Clause (sig : Signature) (X : Variables) := List (Literal sig X)
 
 instance {sig : Signature} {X : Variables} : Membership (Literal sig X) (Clause sig X) :=
@@ -81,6 +85,18 @@ inductive Formula (sig: Signature) (X: Variables) where
   | iff (f g : @Formula sig X)
   | all (x : X) (f : @Formula sig X)
   | ex (x : X) (f : @Formula sig X)
+
+@[simp]
+def Clause.toFormula {sig : Signature} {X : Variables} : @Clause sig X -> @Formula sig X
+  | [] => Formula.verum
+  | .pos l :: ls => Formula.or (Formula.atom l) (Clause.toFormula ls)
+  | .neg l :: ls => Formula.or (Formula.neg (Formula.atom l)) (Clause.toFormula ls)
+
+instance {sig : Signature} {X : Variables} : Coe (Clause sig X) (Formula sig X) :=
+  ⟨Clause.toFormula⟩
+
+instance {sig : Signature} {X : Variables} : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
+  ⟨fun N => {Clause.toFormula C | C ∈ N}⟩
 
 @[simp]
 def Substitution (sig : Signature) (X : Variables) := X -> Term sig X
@@ -115,6 +131,7 @@ infix:50 " ≤ " => MoreGeneral
 
 def example_subst : Substitution (Signature.mk String String) String :=
   fun x => if x == "z" then Term.func "f" [Term.var "y"] else Term.var x
+
 def example_subst' : Substitution (Signature.mk String String) String :=
   fun x => if x == "z" then Term.func "f" [Term.var "z"] else
     if x == "y" then Term.var "z" else Term.var x
@@ -125,6 +142,7 @@ theorem example_more_general : example_subst ≤ example_subst' := by
   simp [example_subst, example_subst']
   by_cases hx : x = "z" <;> by_cases hy : x = "y" <;> simp [hx, hy]
 
+@[simp]
 def Idempotent {sig : Signature} {X : Variables} [BEq X] (σ : Substitution sig X) : Prop :=
   σ ∘ σ = σ
 
@@ -195,6 +213,7 @@ def Assignment.modify_rfl {X : Variables} {univ : Universes} [DecidableEq X]
   · rfl
 
 -- x ≠ y → β[x ↦ a, y ↦ b] = β[y ↦ b, x ↦ a]
+@[simp]
 def Assignment.modify_comm {X : Variables} {univ : Universes} [DecidableEq X]
     {β : Assignment X univ} (x y : X) (a b : univ) :
     x ≠ y → (β.modify x a).modify y b = (β.modify y b).modify x a := by
@@ -205,7 +224,6 @@ def Term.eval {sig : Signature} {X : Variables}
     (I : Interpretation sig) (β : Assignment X I.univ) : @Term sig X -> I.univ
   | Term.var x => β x
   | Term.func f args => (I.functions f) <| args.attach.map (fun ⟨a, _⟩ => Term.eval I β a)
-
 
 @[simp]
 def Atom.substitute {sig : Signature} {X : Variables} [DecidableEq X]
@@ -245,29 +263,6 @@ def Formula.freeVars {sig : Signature} {X : Variables} : @Formula sig X -> Set X
   | Formula.iff f g => Formula.freeVars f ∪ Formula.freeVars g
   | Formula.all x f => Formula.freeVars f \ {x}
   | Formula.ex x f => Formula.freeVars f \ {x}
-
-
-/-
-TODO: take care of bound variables in quantifiers or maybe just dont care?
-(Qx F)σ = Qz (F σ[x → z]) with z a fresh variable and Q ∈ {∀, ∃}
-However, how can we cleanly ensure that z is fresh?
-Do we even need to? Let's not do it now and mabye add some hypothesis for the substiution later.
-This should force drastic modifications of everything buildng on this (fingers crossed).
--/
-@[simp]
-def Formula.substitute {sig : Signature} {X : Variables}
-    [inst : DecidableEq X] [inst_nonempty : Nonempty X]
-    (σ : Substitution sig X) : @Formula sig X -> @Formula sig X
-  | Formula.falsum => Formula.falsum
-  | Formula.verum => Formula.verum
-  | Formula.atom a => Formula.atom (Atom.substitute σ a)
-  | Formula.neg f => Formula.neg (substitute σ f)
-  | Formula.and f g => Formula.and (substitute σ f) (substitute σ g)
-  | Formula.or f g => Formula.or (substitute σ f) (substitute σ g)
-  | Formula.imp f g => Formula.imp (substitute σ f) (substitute σ g)
-  | Formula.iff f g => Formula.iff (substitute σ f) (substitute σ g)
-  | Formula.all x f => Formula.all x (substitute σ f)
-  | Formula.ex x f => Formula.all x (substitute σ f)
 
 
 /-
@@ -335,21 +330,73 @@ theorem entails_iff_and_not_unsat {sig : Signature} {X : Variables} [inst : Deci
     (F G : Formula sig X) :
     Entails F G ↔ @Unsatisfiable sig X inst (Formula.and F (Formula.neg G)) := by simp
 
-/-
-Expand this to sets of Formulas
--/
+@[simp]
+def Literal.satisfied_by {sig : Signature} {X: Variables} [DecidableEq X]
+    (L : Literal sig X) (I : @Interpretation sig) (β : Assignment X I.univ) : Prop :=
+  EntailsInterpret I β <| match L with
+    | Literal.pos a => Formula.atom a
+    | Literal.neg a => Formula.neg (Formula.atom a)
+
 @[simp]
 def SetEntails {sig : Signature} {X : Variables} [DecidableEq X]
     (N : Set (Formula sig X)) (F : Formula sig X) : Prop :=
   ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
     (∀ G ∈ N, EntailsInterpret I β G) → EntailsInterpret I β F
 
+@[simp]
+def ClauseSetEntails {sig : Signature} {X : Variables} [DecidableEq X]
+    (N : Set <| Clause sig X) (C : Clause sig X) : Prop :=
+  ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+    (∀ D ∈ N, EntailsInterpret I β D) → EntailsInterpret I β C
+
 lemma entails_setEntails {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (F G : Formula sig X) : Entails F G ↔ @SetEntails sig X inst {F} G := by simp
 
 @[simp]
+def ClauseSatisfiable {sig : Signature} {X : Variables} [DecidableEq X] (C : Clause sig X) : Prop :=
+  ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
+    ∃ L : Literal sig X, L ∈ C ∧ L.satisfied_by I β
+
+@[simp]
+theorem ClauseSatisfiable_imp_Satisfiable {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (C : Clause sig X) : ClauseSatisfiable C → @Satisfiable sig X inst ↑C := by
+  simp only [ClauseSatisfiable, Assignment, Satisfiable, EntailsInterpret]
+  intro ⟨I, ⟨β, ⟨L, ⟨h_L_in_C, hsatby⟩⟩⟩⟩
+  use I, β
+  induction C with
+  | nil =>
+    exact False.elim (List.not_mem_nil L h_L_in_C)
+  | cons head Ctail ih =>
+    rw [Clause.toFormula.eq_def]
+    split
+    next => simp only [Formula.eval]
+    all_goals -- proof cases for Literal.pos and Literal.neg at once
+    next h_split atom tail h_head_pos_atom =>
+      simp_all only [List.cons.injEq, Formula.eval]
+      obtain ⟨h_head_atom, _⟩ := h_head_pos_atom
+      have mem_head : L = head ∨ L ∈ tail := by simp [h_head_atom, List.mem_cons.mp h_L_in_C]
+      cases mem_head
+      next _h_is_head =>
+        constructor
+        simp_all only [List.cons.injEq, true_and, Atom.eval]
+        exact hsatby
+      next h_in_tail =>
+        apply Or.inr
+        exact ih h_in_tail
+
+@[simp]
 def SetSatisfiable {sig : Signature} {X : Variables} [DecidableEq X]
     (N : Set (@Formula sig X)) : Prop :=
+  ∃ (I : @Interpretation sig) (β : Assignment X I.univ), ∀ G ∈ N, EntailsInterpret I β G
+
+@[simp]
+def ClauseSetSatisfiableByLiterals {sig : Signature} {X : Variables} [DecidableEq X]
+    (N : Set <| Clause sig X) : Prop :=
+  ∃ (I : @Interpretation sig) (β : Assignment X I.univ), ∀ C ∈ N, ∃ L ∈ C, L.satisfied_by I β
+
+@[simp]
+def ClauseSetSatisfiable {sig : Signature} {X : Variables} [DecidableEq X]
+    (N : Set <| Clause sig X) : Prop :=
   ∃ (I : @Interpretation sig) (β : Assignment X I.univ), ∀ G ∈ N, EntailsInterpret I β G
 
 @[simp]
@@ -368,26 +415,11 @@ lemma unsat_as_set_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X
 theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (N : Set $ Formula sig X) (G : Formula sig X) :
     SetEntails N G ↔ @SetUnsatisfiable sig X inst (N ∪ {Formula.neg G}) := by
-        sorry
+  sorry
 
-/-Expand this to Literals and Clauses-/
-def Literal.satisfied_by {sig : Signature} {X: Variables} [DecidableEq X]
-    (L : Literal sig X) (I : @Interpretation sig) (β : Assignment X I.univ) : Prop :=
-  EntailsInterpret I β <| match L with
-    | Literal.pos a => Formula.atom a
-    | Literal.neg a => Formula.neg (Formula.atom a)
-
-def ClauseSatisfiable {sig : Signature} {X : Variables} [DecidableEq X] (C : Clause sig X) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
-    ∃ L : Literal sig X, L ∈ C ∧ L.satisfied_by I β
-
-def ClauseSetSatisfiable {sig : Signature} {X : Variables} [DecidableEq X]
-    (N : Set <| Clause sig X) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ), ∀ C ∈ N, ∃ L, L ∈ C ∧ L.satisfied_by I β
 
 /-
 ### 3.3.4 Substitution Lemma
-- do it later maybe
 -/
 @[simp]
 def Assignment.compose {sig : Signature} {X : Variables} [DecidableEq X]
@@ -428,7 +460,6 @@ theorem substitution_lemma' {sig : Signature} {X : Variables} [DecidableEq X]
         List.map (Assignment.compose I β σ) args = .map (Term.eval I β ∘ .substitute σ) args := by
       simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
     rw [hargsarequal]
-
 
 -- for variables x_1,...,x_n and formula F, this returns ∀ x_1 ... x_n, F
 @[simp]
@@ -731,6 +762,7 @@ def EqualityProblem (sig : Signature) (X : Variables) :=
 instance {sig : Signature} {X : Variables} : Membership (Equality sig X) (EqualityProblem sig X) :=
   List.instMembership
 
+@[simp]
 def EqualityProblem.freeVars {sig : Signature} {X : Variables} :
     @EqualityProblem sig X -> Set X
   | [] => ∅
@@ -766,7 +798,7 @@ theorem unifiable_iff_mgu_idempot {sig : Signature} {X : Variables} [inst : Deci
     (E : EqualityProblem sig X) : Unifiable E ↔ ∃ σ : Substitution sig X,
       MostGeneralUnifier E σ ∧ Idempotent σ ∧ σ.domain ∪ σ.codomain ⊆ E.freeVars := by
   apply Iff.intro
-  · sorry
+  · sorry -- this will need the standard unification algorithm
   · intro h
     obtain ⟨σ, ⟨⟨⟩⟩⟩ := h
     use σ
@@ -776,49 +808,54 @@ alias main_unification_theorem := unifiable_iff_mgu_idempot
 /-
 ### 3.7 Inference Systems and Proofs
 -/
-structure Inference (sig : Signature) (X : Variables) where
-  premises : Set (Formula sig X)
-  conclusion : Formula sig X
 
--- TODO: make this def := List
-structure InferenceSystem (sig : Signature) (X : Variables) where
-  inferences : List (Inference sig X)
+/--
+We limit this to clausal proofs.
+-/
+structure Inference (sig : Signature) (X : Variables) where
+  premises : Set (Clause sig X)
+  conclusion : Clause sig X
+
+def InferenceSystem (sig : Signature) (X : Variables) := List (Inference sig X)
+
+instance {sig : Signature} {X : Variables} : Membership (Inference sig X) (InferenceSystem sig X) :=
+  List.instMembership
 
 structure Proof {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) where
-  assumptions : Set (Formula sig X)
-  conclusion : Formula sig X
-  formulas : List (Formula sig X)
-  formulas_not_empty : formulas ≠ ∅
-  last_formula_conclusion : formulas[formulas.length - 1]'(by
-    have hlennonzero : formulas.length ≠ 0 := by
+  assumptions : Set (Clause sig X)
+  conclusion : Clause sig X
+  clauses : List (Clause sig X)
+  clauses_not_empty : clauses ≠ ∅
+  last_clause_conclusion : clauses[clauses.length - 1]'(by
+    have hlennonzero : clauses.length ≠ 0 := by
       simp_all only [List.empty_eq, ne_eq, List.length_eq_zero, not_false_eq_true]
     exact Nat.sub_one_lt hlennonzero) = conclusion
-  is_valid : ∀ i (hindex : i < formulas.length), formulas[i] ∈ assumptions ∨
-    ∃ inference ∈ Γ.inferences, formulas[i] = inference.conclusion ∧
-      ∀ formula ∈ inference.premises, ∃ (j : ℕ) (hjindex : j < i), formula = formulas[j]
+  is_valid : ∀ i (hindex : i < clauses.length), clauses[i] ∈ assumptions ∨
+    ∃ inference ∈ Γ, clauses[i] = inference.conclusion ∧
+      ∀ Clause ∈ inference.premises, ∃ (j : ℕ) (hjindex : j < i), Clause = clauses[j]
 
 @[simp]
 def Provability {sig : Signature} {X : Variables}
-    (Γ : InferenceSystem sig X) (N : Set (Formula sig X)) (F : Formula sig X) : Prop :=
+    (Γ : InferenceSystem sig X) (N : Set (Clause sig X)) (F : Clause sig X) : Prop :=
   ∃ proof : Proof Γ, proof.assumptions = N ∧ proof.conclusion = F
 
 @[simp]
 def Soundness {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (Γ : InferenceSystem sig X) : Prop :=
-  ∀ inference ∈ Γ.inferences, SetEntails inference.premises inference.conclusion
+  ∀ inference ∈ Γ, ClauseSetEntails inference.premises inference.conclusion
 
 @[simp]
 def GeneralSoundness {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (Γ : InferenceSystem sig X) : Prop :=
-  ∀ (N : Set (Formula sig X)) (F : Formula sig X), Provability Γ N F → SetEntails N F
+  ∀ (N : Set (Clause sig X)) (F : Clause sig X), Provability Γ N F → ClauseSetEntails N F
 
 theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (Γ : InferenceSystem sig X) : Soundness Γ → GeneralSoundness Γ := by
   intro hsound N F hproof A β hgstrue
   rcases hproof with ⟨proof, ⟨hassumptions, hconclusion⟩⟩
-  have hproofsequencetrue : ∀ F ∈ proof.formulas, EntailsInterpret A β F := by
-    have hindicestrue : ∀ i (hindex : i < proof.formulas.length),
-        EntailsInterpret A β proof.formulas[i] := by
+  have hproofsequencetrue : ∀ F ∈ proof.clauses, EntailsInterpret A β F := by
+    have hindicestrue : ∀ i (hindex : i < proof.clauses.length),
+        EntailsInterpret A β proof.clauses[i] := by
       intro i hlen
       induction' i using Nat.case_strong_induction_on with i ih
       · have hvalid := proof.is_valid 0 hlen
@@ -837,17 +874,17 @@ theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : 
           rw [heq]
           exact hjtrue
     intro F hF
-    have hfindex : ∃ (i : ℕ) (hindex : i < proof.formulas.length), proof.formulas[i] = F :=
+    have hfindex : ∃ (i : ℕ) (hindex : i < proof.clauses.length), proof.clauses[i] = F :=
       List.mem_iff_getElem.mp hF
     aesop
-  have hlen : proof.formulas.length - 1 < proof.formulas.length := by
-    have hlennonzero : proof.formulas.length ≠ 0 := by
-      have hnonempty := proof.formulas_not_empty
+  have hlen : proof.clauses.length - 1 < proof.clauses.length := by
+    have hlennonzero : proof.clauses.length ≠ 0 := by
+      have hnonempty := proof.clauses_not_empty
       simp_all only [List.empty_eq, ne_eq, List.length_eq_zero, not_false_eq_true]
     exact Nat.sub_one_lt hlennonzero
-  have hfconclusion := proof.is_valid (proof.formulas.length - 1) hlen
-  have hfislast : proof.formulas[proof.formulas.length - 1] = F := by
-    rw [proof.last_formula_conclusion, hconclusion]
+  have hfconclusion := proof.is_valid (proof.clauses.length - 1) hlen
+  have hfislast : proof.clauses[proof.clauses.length - 1] = F := by
+    rw [proof.last_clause_conclusion, hconclusion]
   rw [hfislast] at hfconclusion
   rcases hfconclusion with hl | hr
   · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
@@ -868,40 +905,64 @@ theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : 
 ### 3.8 Ground (or Propositional) Resolution
 -/
 
-theorem groundResolution_soundness {sig : Signature} {X : Variables} {D A C : Formula sig X}
-    [inst : DecidableEq X] (Resolution : Inference sig X)
-    (hresolution : Resolution = ⟨{.or D A, .or C (.neg A)}, .or D C⟩)
-    (Factorization : Inference sig X)
-    (hfactorization : Factorization = ⟨{.or (.or C A) A}, .or C A⟩)
-    (Γ_Resolution : InferenceSystem sig X) (hgamma : Γ_Resolution = ⟨[Resolution, Factorization]⟩) :
-    Soundness Γ_Resolution := by
-  intro inference hinf I β hgstrue
-  -- aesop would already close the goal here
-  subst hresolution hgamma hfactorization
-  simp_all only [EntailsInterpret, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false]
-  rcases hinf with hres | hfact
-  -- we first show that the resolution inference rule is correct
-  · subst hres
-    simp_all only [Set.mem_insert_iff, Set.mem_singleton_iff,
-      forall_eq_or_imp, Formula.eval, forall_eq]
-    obtain ⟨D_or_A, C_or_notA⟩ := hgstrue
-    rcases D_or_A with hD | hA
-    · left
-      exact hD
-    · rcases C_or_notA with hC | hnA
-      · right
-        exact hC
-      · exact False.elim (hnA hA)
-  -- next, we show that the factorization inference rule is correct
-  · subst hfact
-    simp_all only [Set.mem_singleton_iff, Formula.eval, forall_eq]
-    rcases hgstrue with (hC | hA) | hA
-    · left
-      exact hC
-    · right
-      exact hA
-    · right
-      exact hA
+@[simp]
+def FactorizationRule {sig : Signature} (A : Atom sig Empty) (C : Clause sig Empty) :
+    Inference sig Empty :=
+  ⟨{.pos A :: .pos A :: C}, .pos A :: C⟩
+
+@[simp]
+def ResolutionRule {sig : Signature} (A : Atom sig Empty) (C D : Clause sig Empty) :
+    Inference sig Empty :=
+  ⟨{.pos A :: C, .neg A :: D}, C.append D⟩
+
+/--
+Both rules of the Resolution Calculus.
+Note that at the moment this is an inference system.
+Ideally we could somehow move the `A C D` inside the rules to use factorization without `D`.
+-/
+@[simp]
+def GroundResolution (sig : Signature) (A : Atom sig Empty) (C D : Clause sig Empty) :
+    InferenceSystem sig Empty :=
+  [ResolutionRule A C D, FactorizationRule A C]
+
+lemma ground_clause_iff_literal {sig: Signature}
+    (I : Interpretation sig) (β : Assignment Empty I.univ) (C : Clause sig Empty) :
+    Formula.eval I β ↑C ↔ (∃ L ∈ C, L.satisfied_by I β) ∨ C = [] := by
+  apply Iff.intro
+  · intro h_eval
+    induction C with
+    | nil => simp
+    | cons head tail ih =>
+      left
+      by_cases hl : head.satisfied_by I β
+      · use head
+        simp_all only [Clause, Literal.satisfied_by, EntailsInterpret, List.mem_cons, true_or,
+          and_self]
+      · sorry -- show that ¬head.sat ∨ .eval ↑(head :: tail) → .eval ↑tail using `false_or`
+  · sorry -- this should be the easier case using induction on C and `List.mem_cons`
+
+
+theorem groundResolution_soundness {sig : Signature }
+    {A : Atom sig Empty} {C D : Clause sig Empty} : Soundness (GroundResolution sig A C D):= by
+  rw [Soundness]
+  intro rule h_rule_ground I β h_premise_true
+  simp [EntailsInterpret]
+  simp_all only [GroundResolution, ResolutionRule, Clause, List.append_eq, FactorizationRule,
+    EntailsInterpret]
+  rw [List.mem_cons, List.mem_singleton] at h_rule_ground
+  cases h_rule_ground
+  -- proof of resolution rule
+  next h_res_rule =>
+    subst h_res_rule
+    simp_all only [Set.mem_insert_iff, Set.mem_singleton_iff, forall_eq_or_imp, forall_eq]
+    obtain ⟨h_posAconsC, h_negAconsD⟩ := h_premise_true
+    have := (ground_clause_iff_literal I β (Literal.pos A :: C)).mp h_posAconsC
+    sorry -- the heavy lifting here should be done by `ground_clause_iff_literal`
+  -- proof of factorization rule
+  next h_fact_rule =>
+    subst h_fact_rule
+    simp_all only [Clause, Set.mem_singleton_iff, Clause.toFormula, Formula.eval, Atom.eval,
+      or_self_left, forall_eq]
 
 /-
 ## Further stuff:

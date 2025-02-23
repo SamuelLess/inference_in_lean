@@ -1,6 +1,8 @@
 import InferenceInLean.Basic
 import Mathlib.Data.Finset.Defs
 
+set_option autoImplicit false
+
 open FirstOrder
 
 /-
@@ -57,16 +59,6 @@ lemma ex_proof_lt : @Formula.eval ex_sig_peano String instDecidableEqString
     ex_interpret_peano ex_assig_peano ex_formula_peano_lt := by
   simp [ex_formula_peano_lt, ex_sig_peano, Interpretation, Assignment, ex_assig_peano]
 
-noncomputable def ex_formula_peano_lt_subst : @Formula ex_sig_peano String :=
-  ex_formula_peano_lt.substitute example_substitution
-
-lemma ex_proof_lt_subst : @Formula.eval ex_sig_peano String instDecidableEqString
-    ex_interpret_peano ex_assig_peano ex_formula_peano_lt_subst := by
-  simp only [ex_sig_peano, ex_interpret_peano, ex_formula_peano_lt_subst]
-  unfold example_substitution
-  simp only [example_substitution, ex_sig_peano]
-  rw [ex_formula_peano_lt]
-  simp [Formula.substitute, ex_interpret_peano, ex_assig_peano]
 
 #eval @Term.eval ex_sig_peano String ex_interpret_peano ex_assig_peano (Term.var "y")
 
@@ -171,5 +163,57 @@ theorem ex_4_7 {sig : Signature} {X : Variables} [DecidableEq X]
     next h => sorry
     next h => exact hN'sat C h
 
+/--
+Example for the proof type with resolution.
+TODO: Finish this
+-/
+inductive ExFuns
+| b
+| c
+| f
+| h
 
-lemma test {M : Set ℕ} (h : ∀ a, a ∉ M): M = ∅ := by exact Set.eq_empty_of_forall_not_mem h
+inductive ExPreds
+| P
+| Q
+
+def ex_sig_ground : Signature := ⟨ExFuns, ExPreds⟩
+
+def ex_clause : Clause ex_sig_ground Empty :=
+  [.pos (Atom.pred .P [.func ExFuns.b []]),
+   .pos (Atom.pred .P [.func ExFuns.b []])]
+
+def ex_clause' : Clause ex_sig_ground Empty :=
+  [.neg (Atom.pred .P [.func ExFuns.b []])]
+
+def ex_conc : Clause ex_sig_ground Empty :=
+  [.pos (Atom.pred .P [.func ExFuns.b []])]
+
+-- forget about that, the rules are schematic but we don't have that notion here
+def example_proof {A : @Atom ex_sig_ground Empty} {C D : @Clause ex_sig_ground Empty} :
+    @Proof ex_sig_ground Empty (@GroundResolution ex_sig_ground A D C) := {
+      assumptions := {ex_clause}
+      clauses := [ex_clause, ex_conc]
+      conclusion := ex_conc
+      clauses_not_empty := by simp
+      last_clause_conclusion := by simp
+      is_valid := by
+        simp only [List.length_cons, List.length_singleton, Nat.reduceAdd, Set.mem_insert_iff,
+          Set.mem_singleton_iff]
+        simp_all
+        intro i hle
+        have : i = 0 ∨ i = 1 := by sorry
+        cases this
+        next h => simp [h]
+        next h =>
+          subst h
+          apply Or.inr
+          have fact : Inference ex_sig_ground Empty := {
+            premises := {ex_clause}
+            conclusion := ex_conc
+          }
+          use fact
+          apply And.intro
+          · sorry
+          · sorry
+    }
