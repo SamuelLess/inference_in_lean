@@ -301,9 +301,6 @@ lemma Assignment.bigModify_eq_modFn {X : Variables} {univ : Universes} [Decidabl
   · exact Assignment.bigModify_mem β xs as.length (id (Eq.symm hlen)) hnempty as hlen huniq y hmem
   · exact Assignment.bigModify_nonmem β xs y hmem as hlen
 
-/-
-### Lemma 3.3.7
--/
 -- β [x1 ↦ β(x1), ..., xn ↦ β(xn)] = β
 lemma Assignment.substitute_equality {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) :

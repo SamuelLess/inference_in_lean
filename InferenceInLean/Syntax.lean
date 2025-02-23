@@ -118,9 +118,26 @@ def Substitution.modify {sig : Signature} {X : Variables} [DecidableEq X]
 
 @[simp]
 def Term.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) :
-    @Term sig X -> Term sig X
+    Term sig X -> Term sig X
   | Term.var x => σ x
   | Term.func f args => Term.func f <| args.attach.map (fun ⟨a, _⟩ => a.substitute σ)
+
+@[simp]
+def Atom.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) :
+    Atom sig X -> Atom sig X
+  | Atom.pred p ts => Atom.pred p (ts.map (Term.substitute σ))
+  | Atom.eq lhs rhs => Atom.eq (lhs.substitute σ) (rhs.substitute σ)
+
+@[simp]
+def Literal.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) :
+    Literal sig X -> Literal sig X
+  | Literal.pos a => Literal.pos (a.substitute σ)
+  | Literal.neg a => Literal.neg (a.substitute σ)
+
+@[simp]
+def Clause.substitute {sig : Signature} {X : Variables}
+    (σ : Substitution sig X) (C : Clause sig X) : Clause sig X :=
+  C.map (Literal.substitute σ)
 
 @[simp]
 def Substitution.compose {sig : Signature} {X : Variables} (σ τ: Substitution sig X) :

@@ -11,7 +11,7 @@ open Syntax
 open Semantics
 open Models
 open Unification
-open Inference
+open Inferences
 
 namespace Resolution
 
@@ -20,14 +20,14 @@ namespace Resolution
 -/
 
 @[simp]
-def FactorizationRule {sig : Signature} (A : Atom sig Empty) (C : Clause sig Empty) :
+def GroundResolutionRule {sig : Signature} (A : Atom sig Empty) (C D : Clause sig Empty) :
     Inference sig Empty :=
-  ⟨{.pos A :: .pos A :: C}, .pos A :: C⟩
+  ⟨{.pos A :: C, .neg A :: D}, C.append D, True⟩
 
 @[simp]
-def ResolutionRule {sig : Signature} (A : Atom sig Empty) (C D : Clause sig Empty) :
+def GroundFactorizationRule {sig : Signature} (A : Atom sig Empty) (C : Clause sig Empty) :
     Inference sig Empty :=
-  ⟨{.pos A :: C, .neg A :: D}, C.append D⟩
+  ⟨{.pos A :: .pos A :: C}, .pos A :: C, True⟩
 
 /--
 Both rules of the Resolution Calculus.
@@ -37,7 +37,7 @@ Ideally we could somehow move the `A C D` inside the rules to use factorization 
 @[simp]
 def GroundResolution (sig : Signature) (A : Atom sig Empty) (C D : Clause sig Empty) :
     InferenceSystem sig Empty :=
-  [ResolutionRule A C D, FactorizationRule A C]
+  [GroundResolutionRule A C D, GroundFactorizationRule A C]
 
 lemma ground_clause_iff_literal {sig: Signature}
     (I : Interpretation sig) (β : Assignment Empty I.univ) (C : Clause sig Empty) :
@@ -55,13 +55,12 @@ lemma ground_clause_iff_literal {sig: Signature}
       · sorry -- show that ¬head.sat ∨ .eval ↑(head :: tail) → .eval ↑tail using `false_or`
   · sorry -- this should be the easier case using induction on C and `List.mem_cons`
 
-
 theorem groundResolution_soundness {sig : Signature }
     {A : Atom sig Empty} {C D : Clause sig Empty} : Soundness (GroundResolution sig A C D):= by
   rw [Soundness]
   intro rule h_rule_ground I β h_premise_true
   simp [EntailsInterpret]
-  simp_all only [GroundResolution, ResolutionRule, Clause, List.append_eq, FactorizationRule,
+  simp_all only [GroundResolution, GroundResolutionRule, Clause, List.append_eq, GroundFactorizationRule,
     EntailsInterpret]
   rw [List.mem_cons, List.mem_singleton] at h_rule_ground
   cases h_rule_ground
@@ -82,6 +81,26 @@ theorem groundResolution_soundness {sig : Signature }
 /-
 ### 3.10 General Resolution
 -/
+
+-- TODO: do we need to add that freeVars ∩ freeVars = ∅?
+@[simp]
+def GeneralResolutionRule {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (A B : Atom sig X) (C D : Clause sig X) :
+    Inference sig X :=
+  ⟨{.pos A :: C, .neg B :: D}, C.append D, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
+
+@[simp]
+def GeneralFactorizationRule {sig : Signature} {X : Variables} [inst : DecidableEq X]
+  (A B : Atom sig X) (C : Clause sig X) :
+    Inference sig X :=
+  ⟨{.pos A :: .pos B :: C}, .pos A :: C, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
+
+
+
+theorem generalResolution_soundness {sig : Signature } {X : Variables} [inst : DecidableEq X]
+    {A B : Atom sig X} {C D : Clause sig X} :
+    Soundness ([GeneralResolutionRule A B C D, GeneralFactorizationRule A B C]):= by
+  sorry
 
 
 /-

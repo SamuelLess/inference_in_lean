@@ -206,6 +206,9 @@ theorem substitution_lemma' {sig : Signature} {X : Variables} [DecidableEq X]
       simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
     rw [hargsarequal]
 
+/-
+### Lemma 3.3.7
+-/
 --(hfree : ∀ x ∈ xs, x ∈ F.freeVars)
 lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X] (n : ℕ)
     (F : Formula sig X) (xs : List X) (huniq : xs.Nodup) (hn : xs.length = n) :
@@ -254,3 +257,17 @@ lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X] (n : �
       intro a
       specialize ih (n - 1) (List.Nodup.of_cons huniq) (Nat.eq_sub_of_add_eq hn) (β.modify x a)
       exact ih
+
+/-
+### Lemma 3.3.8
+-/
+lemma three_three_eight {sig : Signature} {X : Variables} [DecidableEq X] (n m : ℕ)
+    (C : Clause sig X) (xs : List X) (hxuniq : xs.Nodup) (hn : xs.length = n)
+    (σ : Substitution sig X) (ys : List X) (hyuniq : ys.Nodup) (hm : ys.length = m) :
+    Valid (Formula.bigForall xs C.toFormula) →
+      Valid (Formula.bigForall ys (C.substitute σ).toFormula) := by
+  intro h
+  have := (three_three_seven n C.toFormula xs hxuniq hn).mp h
+  have := (three_three_seven m (C.substitute σ).toFormula ys hyuniq hm).mpr
+  apply this
+  sorry -- use 3.3.5 (see lecture notes)

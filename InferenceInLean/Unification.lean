@@ -16,7 +16,7 @@ namespace Unification
 
 @[simp]
 def Equality (sig : Signature) (X : Variables) :=
-  Term sig X × Term sig X
+  Atom sig X × Atom sig X
 
 @[simp]
 def EqualityProblem (sig : Signature) (X : Variables) :=
@@ -29,7 +29,7 @@ instance {sig : Signature} {X : Variables} : Membership (Equality sig X) (Equali
 def EqualityProblem.freeVars {sig : Signature} {X : Variables} :
     @EqualityProblem sig X -> Set X
   | [] => ∅
-  | (lhs, rhs) :: eqs => Term.freeVars lhs ∪ Term.freeVars rhs ∪ freeVars eqs
+  | (lhs, rhs) :: eqs => Atom.freeVars lhs ∪ Atom.freeVars rhs ∪ freeVars eqs
 
 @[simp]
 def Unifier {sig : Signature} {X : Variables} [DecidableEq X]
@@ -37,7 +37,7 @@ def Unifier {sig : Signature} {X : Variables} [DecidableEq X]
   ∀ eq ∈ E, have ⟨lhs, rhs⟩ := eq; lhs.substitute σ = rhs.substitute σ
 
 def example_unification_problem : EqualityProblem (Signature.mk String String) String :=
-  [(.func "f" [Term.var "x"], Term.var "y")]
+  [(.pred "P" [.func "f" [Term.var "x"]], .pred "P" [Term.var "y"])]
 
 def example_unifier : Substitution (Signature.mk String String) String :=
   fun x => if x == "y" then Term.func "f" [Term.var "x"] else Term.var x

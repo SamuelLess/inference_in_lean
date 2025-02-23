@@ -10,7 +10,7 @@ open Syntax
 open Semantics
 open Models
 open Unification
-namespace Inference
+namespace Inferences
 /-
 ### 3.7 Inference Systems and Proofs
 -/
@@ -21,6 +21,7 @@ We limit this to clausal proofs.
 structure Inference (sig : Signature) (X : Variables) where
   premises : Set (Clause sig X)
   conclusion : Clause sig X
+  condition: Prop
 
 def InferenceSystem (sig : Signature) (X : Variables) := List (Inference sig X)
 
