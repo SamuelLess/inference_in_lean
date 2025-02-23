@@ -60,12 +60,6 @@ def Term.eval {sig : Signature} {X : Variables}
   | Term.func f args => (I.functions f) <| args.attach.map (fun ⟨a, _⟩ => Term.eval I β a)
 
 @[simp]
-def Atom.substitute {sig : Signature} {X : Variables} [DecidableEq X]
-    (σ : Substitution sig X) : @Atom sig X -> Atom sig X
-  | Atom.pred p args => Atom.pred p <| args.map (.substitute σ)
-  | Atom.eq lhs rhs => Atom.eq (.substitute σ lhs) (.substitute σ rhs)
-
-@[simp]
 def Atom.eval {sig : Signature} {X : Variables}
     (I : Interpretation sig) (β : Assignment X I.univ) : @Atom sig X -> Prop
   | Atom.pred p args => (I.predicates p) (args.map (Term.eval I β))

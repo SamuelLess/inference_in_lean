@@ -65,8 +65,8 @@ theorem groundResolution_soundness {sig : Signature }
   rw [Soundness]
   intro rule h_rule_ground hcond I β h_premise_true
   simp [EntailsInterpret]
-  simp_all only [GroundResolution, GroundResolutionRule, Clause, List.append_eq, GroundFactorizationRule,
-    EntailsInterpret]
+  simp_all only [GroundResolution, GroundResolutionRule, Clause, List.append_eq,
+    GroundFactorizationRule, EntailsInterpret]
   rw [List.mem_cons, List.mem_singleton] at h_rule_ground
   cases h_rule_ground
   -- proof of resolution rule
@@ -76,13 +76,11 @@ theorem groundResolution_soundness {sig : Signature }
     obtain ⟨h_posAconsC, h_negAconsD⟩ := h_premise_true
     rw [eval_append_iff_eval_or]
     aesop
-    -- the heavy lifting here should be done by `ground_clause_iff_literal`
   -- proof of factorization rule
   next h_fact_rule =>
     subst h_fact_rule
     simp_all only [Clause, Set.mem_singleton_iff, Clause.toFormula, Formula.eval, Atom.eval,
       or_self_left, forall_eq]
-
 
 /-
 ### 3.10 General Resolution
@@ -100,8 +98,6 @@ def GeneralFactorizationRule {sig : Signature} {X : Variables} [inst : Decidable
   (A B : Atom sig X) (C : Clause sig X) :
     Inference sig X :=
   ⟨{.pos A :: .pos B :: C}, .pos A :: C, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
-
-
 
 theorem generalResolution_soundness {sig : Signature } {X : Variables} [inst : DecidableEq X]
     {A B : Atom sig X} {C D : Clause sig X} :
