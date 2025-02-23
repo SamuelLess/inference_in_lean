@@ -104,7 +104,7 @@ def Formula.bigForall {sig : Signature} {X : Variables} [DecidableEq X]
 
 @[simp]
 def Clause.toFormula {sig : Signature} {X : Variables} : @Clause sig X -> @Formula sig X
-  | [] => Formula.verum
+  | [] => Formula.falsum
   | .pos l :: ls => Formula.or (Formula.atom l) (Clause.toFormula ls)
   | .neg l :: ls => Formula.or (Formula.neg (Formula.atom l)) (Clause.toFormula ls)
 

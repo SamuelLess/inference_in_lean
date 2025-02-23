@@ -22,7 +22,7 @@ namespace Resolution
 @[simp]
 def GroundResolutionRule {sig : Signature} (A : Atom sig Empty) (C D : Clause sig Empty) :
     Inference sig Empty :=
-  ⟨{.pos A :: C, .neg A :: D}, C.append D, True⟩
+  ⟨{.pos A :: C, .neg A :: D}, C ++ D, True⟩
 
 @[simp]
 def GroundFactorizationRule {sig : Signature} (A : Atom sig Empty) (C : Clause sig Empty) :
@@ -39,26 +39,31 @@ def GroundResolution (sig : Signature) (A : Atom sig Empty) (C D : Clause sig Em
     InferenceSystem sig Empty :=
   [GroundResolutionRule A C D, GroundFactorizationRule A C]
 
-lemma ground_clause_iff_literal {sig: Signature}
-    (I : Interpretation sig) (β : Assignment Empty I.univ) (C : Clause sig Empty) :
-    Formula.eval I β ↑C ↔ (∃ L ∈ C, Literal.satisfied_by L I β) ∨ C = [] := by
-  apply Iff.intro
-  · intro h_eval
-    induction C with
-    | nil => simp
-    | cons head tail ih =>
-      left
-      by_cases hl : Literal.satisfied_by head I β
-      · use head
-        simp_all only [Clause, Literal.satisfied_by, EntailsInterpret, List.mem_cons, true_or,
-          and_self]
-      · sorry -- show that ¬head.sat ∨ .eval ↑(head :: tail) → .eval ↑tail using `false_or`
-  · sorry -- this should be the easier case using induction on C and `List.mem_cons`
+lemma eval_append_iff_eval_or {sig : Signature} {X : Variables} [DecidableEq X]
+    {I : Interpretation sig} (β : Assignment X I.univ) (C D : Clause sig X):
+    Formula.eval I β (Clause.toFormula (C ++ D)) ↔
+    Formula.eval I β (Formula.or C.toFormula D.toFormula) := by
+  induction' C with c cs ih generalizing D
+  · simp only [Clause, List.nil_append, Formula.eval, Clause.toFormula, Formula.eval.eq_1, false_or]
+  · match c with
+    | .pos a =>
+      specialize ih D
+      rw [List.cons_append, Clause.toFormula]
+      rw [Clause.toFormula, Formula.eval] at *
+      rw [ih]
+      aesop
+    | .neg a =>
+      rw [Clause.toFormula]
+      specialize ih D
+      rw [List.cons_append, Clause.toFormula]
+      rw [Formula.eval] at *
+      rw [ih]
+      aesop
 
 theorem groundResolution_soundness {sig : Signature }
     {A : Atom sig Empty} {C D : Clause sig Empty} : Soundness (GroundResolution sig A C D):= by
   rw [Soundness]
-  intro rule h_rule_ground I β h_premise_true
+  intro rule h_rule_ground hcond I β h_premise_true
   simp [EntailsInterpret]
   simp_all only [GroundResolution, GroundResolutionRule, Clause, List.append_eq, GroundFactorizationRule,
     EntailsInterpret]
@@ -69,8 +74,9 @@ theorem groundResolution_soundness {sig : Signature }
     subst h_res_rule
     simp_all only [Set.mem_insert_iff, Set.mem_singleton_iff, forall_eq_or_imp, forall_eq]
     obtain ⟨h_posAconsC, h_negAconsD⟩ := h_premise_true
-    have := (ground_clause_iff_literal I β (Literal.pos A :: C)).mp h_posAconsC
-    sorry -- the heavy lifting here should be done by `ground_clause_iff_literal`
+    rw [eval_append_iff_eval_or]
+    aesop
+    -- the heavy lifting here should be done by `ground_clause_iff_literal`
   -- proof of factorization rule
   next h_fact_rule =>
     subst h_fact_rule
@@ -87,7 +93,7 @@ theorem groundResolution_soundness {sig : Signature }
 def GeneralResolutionRule {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (A B : Atom sig X) (C D : Clause sig X) :
     Inference sig X :=
-  ⟨{.pos A :: C, .neg B :: D}, C.append D, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
+  ⟨{.pos A :: C, .neg B :: D}, C ++ D, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
 
 @[simp]
 def GeneralFactorizationRule {sig : Signature} {X : Variables} [inst : DecidableEq X]
@@ -100,7 +106,25 @@ def GeneralFactorizationRule {sig : Signature} {X : Variables} [inst : Decidable
 theorem generalResolution_soundness {sig : Signature } {X : Variables} [inst : DecidableEq X]
     {A B : Atom sig X} {C D : Clause sig X} :
     Soundness ([GeneralResolutionRule A B C D, GeneralFactorizationRule A B C]):= by
-  sorry
+  rw [Soundness]
+  intro rule h_rule_ground hcond I β h_premise_true
+  simp_all only [GeneralResolutionRule, Clause, List.append_eq, GeneralFactorizationRule,
+    EntailsInterpret]
+  rw [List.mem_cons, List.mem_singleton] at h_rule_ground
+  cases h_rule_ground
+  -- proof of resolution rule
+  next h_res_rule =>
+    subst h_res_rule
+    simp only [GeneralResolutionRule] at h_premise_true
+    simp_all only [Clause, GeneralResolutionRule, List.append_eq, Substitution.eq_1,
+      MostGeneralUnifier, Unifier, Equality.eq_1, EqualityProblem.eq_1, List.mem_singleton,
+      forall_eq, MoreGeneral, Set.mem_insert_iff, Set.mem_singleton_iff,
+      EntailsInterpret, forall_eq_or_imp, Clause.toFormula, Formula.eval]
+    rcases hcond with ⟨σ, hunif, hmgu⟩
+    clear hmgu
+    sorry
+  next h_fact_rule =>
+    sorry
 
 
 /-

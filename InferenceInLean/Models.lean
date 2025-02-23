@@ -113,7 +113,7 @@ theorem ClauseSatisfiable_imp_Satisfiable {sig : Signature} {X : Variables} [ins
   | cons head Ctail ih =>
     rw [Clause.toFormula.eq_def]
     split
-    next => simp only [Formula.eval]
+    next => simp_all only [Literal.satisfied_by, EntailsInterpret, Clause.eq_1, List.not_mem_nil]
     all_goals -- proof cases for Literal.pos and Literal.neg at once
     next h_split atom tail h_head_pos_atom =>
       simp_all only [List.cons.injEq, Formula.eval]
