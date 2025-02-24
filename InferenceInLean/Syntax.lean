@@ -49,7 +49,6 @@ def Term.freeVars {sig : Signature} {X : Variables} : @Term sig X -> Set X
   | .func _ [] => ∅
   | .func f (a :: args) => Term.freeVars a ∪ Term.freeVars (Term.func f args)
 
--- TODO: build all of this up with the `ValidTerm`
 inductive Atom (sig : Signature) (X : Variables) where
   | pred (p : sig.preds) (args : List (Term sig X))
   | eq (lhs rhs : Term sig X)
@@ -151,9 +150,11 @@ def Substitution.compose {sig : Signature} {X : Variables} (σ τ: Substitution 
   fun x => (τ x).substitute σ
 infix:90 " ∘ " => Substitution.compose
 
+@[simp]
 def Substitution.domain {sig : Signature} {X : Variables} (σ : Substitution sig X) : Set X :=
   {x : X | σ x ≠ Term.var x}
 
+@[simp]
 def Substitution.codomain {sig : Signature} {X : Variables} (σ : Substitution sig X) : Set X :=
   {x : X | ∃ y : X, y ∈ σ.domain ∧ x ∈ (σ y).freeVars}
 
@@ -179,28 +180,81 @@ theorem example_more_general : example_subst ≤ example_subst' := by
 def Idempotent {sig : Signature} {X : Variables} [BEq X] (σ : Substitution sig X) : Prop :=
   σ ∘ σ = σ
 
+@[simp]
+lemma Substitution.id_of_domain_empty {sig : Signature} {X : Variables} [BEq X]
+    (σ : Substitution sig X) (t : Term sig X) :
+    σ.domain = ∅ → t.substitute σ = t := by
+  intro hdomempty
+  induction' t using Term.induction with x args ih f
+  · have hxnindom : x ∉ σ.domain := by
+      simp_all only [domain, ne_eq, Set.mem_empty_iff_false, not_false_eq_true]
+    simp_all
+    by_cases h : σ x = Term.var x
+    · exact h
+    · exact False.elim (Set.eq_empty_iff_forall_not_mem.mp hdomempty x h)
+  · induction args with
+    | nil => simp only [Term.substitute, List.attach_nil, List.map_nil]
+    | cons head tail ihargs => aesop
+
+@[simp]
+lemma Substitution.id_of_freeVars_empty {sig : Signature} {X : Variables} [BEq X]
+    (σ : Substitution sig X) (t : Term sig X) :
+    t.freeVars = ∅ → t.substitute σ = t := by
+  intro hfreeempty
+  induction' t using Term.induction with x args ih f
+  · simp_all only [Term.freeVars, Set.singleton_ne_empty]
+  · induction args <;> simp_all
+
+@[simp]
+lemma Substitution.id_of_free_not_in_domain {sig : Signature} {X : Variables} [BEq X]
+    (σ : Substitution sig X) (t : Term sig X) :
+    (∀ x ∈ t.freeVars, x ∉ σ.domain) → t.substitute σ = t := by
+  intro hfreenoindom
+  simp_all only [Substitution.domain, ne_eq, Set.mem_setOf_eq, not_not]
+  induction' t using Term.induction with x args ih f
+  · simp_all
+  · induction args <;> simp_all
+
+@[simp]
 theorem idempotent_iff_empty_interesec {sig : Signature} {X : Variables} [BEq X]
     (σ : Substitution sig X) : Idempotent σ ↔ σ.domain ∩ σ.codomain = ∅ := by
-  -- Construct the equivalence by proving both directions.
   apply Iff.intro
   -- Forward direction: If σ is idempotent, then its domain and codomain are disjoint.
-  · intro h
+  · intro hidem
+    simp [*] at hidem
     ext x
-    -- Simplify the membership conditions for the intersection of domain and codomain.
-    simp only [Set.mem_inter_iff, Set.mem_setOf_eq, Set.mem_empty_iff_false, iff_false]
-    -- Introduce a helper lemma to handle the case where x is in both domain and codomain.
-    intro ⟨hxdom, hxcodom⟩
-    -- Use the idempotence property to derive a contradiction.
-    have h1 := congr_fun h x
-    simp [Substitution.domain] at hxdom
-    simp [Substitution.codomain] at hxcodom
-    obtain ⟨y, ⟨hy, hxy⟩⟩ := hxcodom
-    -- σ={x ↦ y, z ↦ x} => σ.dom = {x, z}, σ.codom = {y, x} => x ∈ σ.codom
-    -- x maps to something that is not x
-    -- something maps to x
-    -- so applying once
-    -- use that σ z != (σ ∘ σ) z
+    by_contra hinter
+    simp [*] at hinter
+    obtain ⟨hxindom : x ∈ σ.domain , hxincodom⟩ := hinter
+    obtain ⟨y, ⟨hyindom, hyinfree⟩⟩ := hxincodom
+    have h := congr_fun hidem y
+    /-
+    Do this by counter example:
+    σ={x ↦ y, z ↦ x} => σ.dom = {x, z}, σ.codom = {y, x} => x ∈ σ.codom
+    x maps to something that is not x
+    something maps to x
+    so applying once
+    use that σ z != (σ ∘ σ) z
+    -/
     sorry
   -- Reverse direction: If the domain and codomain are disjoint, then σ is idempotent.
-  · intro h
-    sorry
+  · intro h_inter_empty
+    have h_disjoint_doms : Disjoint σ.domain σ.codomain := by
+      exact Set.disjoint_iff_inter_eq_empty.mpr h_inter_empty
+    have h_nindom_of_incodom := Set.disjoint_left.mp (Disjoint.symm h_disjoint_doms)
+    rw [Substitution.domain, Substitution.codomain, Set.inter_def] at h_inter_empty
+    simp only [Substitution.domain, ne_eq, Substitution.codomain, Set.mem_setOf_eq, Idempotent,
+      Substitution] at h_inter_empty
+    rw [Set.empty_def] at h_inter_empty
+    simp only [Set.setOf_false, Set.eq_empty_iff_forall_not_mem, Set.mem_setOf_eq, not_and,
+      not_exists] at h_inter_empty
+    funext x
+    specialize h_inter_empty x
+    by_cases hid : σ x = Term.var x
+    · simp_all only [not_true_eq_false, IsEmpty.forall_iff, Substitution.compose, Term.substitute]
+    · specialize (h_inter_empty hid) x
+      have hxdom : x ∈ σ.domain := by aesop
+      have hxninfree := h_inter_empty hxdom
+      rw [Substitution.compose]
+      refine Substitution.id_of_free_not_in_domain σ (σ x) ?_
+      aesop
