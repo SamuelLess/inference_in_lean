@@ -41,8 +41,8 @@ def GroundResolution (sig : Signature) (A : Atom sig Empty) (C D : Clause sig Em
 
 lemma eval_append_iff_eval_or {sig : Signature} {X : Variables} [DecidableEq X]
     {I : Interpretation sig} (β : Assignment X I.univ) (C D : Clause sig X):
-    Formula.eval I β (Clause.toFormula (C ++ D)) ↔
-    Formula.eval I β (Formula.or C.toFormula D.toFormula) := by
+    Formula.eval I β (↑(C ++ D)) ↔
+    Formula.eval I β (Formula.or ↑C ↑D) := by
   induction' C with c cs ih generalizing D
   · simp only [Clause, List.nil_append, Formula.eval, Clause.toFormula, Formula.eval.eq_1, false_or]
   · match c with
