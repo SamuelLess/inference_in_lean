@@ -43,8 +43,26 @@ lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Pro
       intro term' harg'
       exact ih term' harg'
 
+mutual
+  def eqTerm {sig : Signature} {X : Variables} [instX : BEq X] [instF : BEq sig.funs] :
+      Term sig X → Term sig X → Bool
+    | Term.var x, Term.var y => x == y
+    | Term.func f fargs, Term.func g gargs => f == g && eqArgs fargs gargs
+    | _, _ => false
+  def eqArgs {sig : Signature} {X : Variables} [instX : BEq X] [instF : BEq sig.funs] :
+      List (Term sig X) → List (Term sig X) → Bool
+    | [], [] => true
+    | [], _ => false
+    | _, [] => false
+    | x :: xs, y :: ys => eqTerm x y && eqArgs xs ys
+end
+
+instance {sig : Signature} {X : Variables} [instX : BEq X] [instF : BEq sig.funs] :
+    BEq (Term sig X) :=
+  ⟨eqTerm⟩
+
 @[simp]
-def Term.freeVars {sig : Signature} {X : Variables} : @Term sig X -> Set X
+def Term.freeVars {sig : Signature} {X : Variables} : Term sig X -> Set X
   | .var x => {x}
   | .func _ [] => ∅
   | .func f (a :: args) => Term.freeVars a ∪ Term.freeVars (Term.func f args)
@@ -54,13 +72,13 @@ inductive Atom (sig : Signature) (X : Variables) where
   | eq (lhs rhs : Term sig X)
 
 @[simp]
-def Atom.freeVars {sig : Signature} {X : Variables} : @Atom sig X -> Set X
+def Atom.freeVars {sig : Signature} {X : Variables} : Atom sig X -> Set X
   | .pred _ args => args.foldl (fun acc t => acc ∪ Term.freeVars t) ∅
   | .eq lhs rhs => Term.freeVars lhs ∪ Term.freeVars rhs
 
 inductive Literal (sig : Signature) (X : Variables) where
-  | pos (a : @Atom sig X)
-  | neg (a : @Atom sig X)
+  | pos (a : Atom sig X)
+  | neg (a : Atom sig X)
 
 @[simp]
 def Literal.comp {sig : Signature} {X : Variables} : Literal sig X -> Literal sig X
@@ -82,14 +100,14 @@ instance {sig : Signature} {X : Variables} : HAppend (Clause sig X) (Clause sig 
 inductive Formula (sig: Signature) (X: Variables) where
   | falsum
   | verum
-  | atom (a : @Atom sig X)
-  | neg (f : @Formula sig X)
-  | and (f g : @Formula sig X)
-  | or (f g : @Formula sig X)
-  | imp (f g : @Formula sig X)
-  | iff (f g : @Formula sig X)
-  | all (x : X) (f : @Formula sig X)
-  | ex (x : X) (f : @Formula sig X)
+  | atom (a : Atom sig X)
+  | neg (f : Formula sig X)
+  | and (f g : Formula sig X)
+  | or (f g : Formula sig X)
+  | imp (f g : Formula sig X)
+  | iff (f g : Formula sig X)
+  | all (x : X) (f : Formula sig X)
+  | ex (x : X) (f : Formula sig X)
 
 /--
  Creates formula ∀ x_1 ... x_n, F.
@@ -102,7 +120,7 @@ def Formula.bigForall {sig : Signature} {X : Variables} [DecidableEq X]
   | x :: xs => .all x (F.bigForall xs)
 
 @[simp]
-def Clause.toFormula {sig : Signature} {X : Variables} : @Clause sig X -> @Formula sig X
+def Clause.toFormula {sig : Signature} {X : Variables} : Clause sig X -> Formula sig X
   | [] => Formula.falsum
   | .pos l :: ls => Formula.or (Formula.atom l) (Clause.toFormula ls)
   | .neg l :: ls => Formula.or (Formula.neg (Formula.atom l)) (Clause.toFormula ls)
@@ -152,11 +170,11 @@ infix:90 " ∘ " => Substitution.compose
 
 @[simp]
 def Substitution.domain {sig : Signature} {X : Variables} (σ : Substitution sig X) : Set X :=
-  {x : X | σ x ≠ Term.var x}
+  {x | σ x ≠ Term.var x}
 
 @[simp]
 def Substitution.codomain {sig : Signature} {X : Variables} (σ : Substitution sig X) : Set X :=
-  {x : X | ∃ y : X, y ∈ σ.domain ∧ x ∈ (σ y).freeVars}
+  {x | ∃ y ∈ σ.domain, x ∈ (σ y).freeVars}
 
 @[simp]
 def MoreGeneral {sig : Signature} {X : Variables} [BEq X] (σ τ : Substitution sig X) : Prop :=
@@ -212,31 +230,58 @@ lemma Substitution.id_of_free_not_in_domain {sig : Signature} {X : Variables} [B
   intro hfreenoindom
   simp_all only [Substitution.domain, ne_eq, Set.mem_setOf_eq, not_not]
   induction' t using Term.induction with x args ih f
-  · simp_all
+  · simp_all only [Term.freeVars, Set.mem_singleton_iff, Term.substitute]
   · induction args <;> simp_all
 
 @[simp]
-theorem idempotent_iff_empty_interesec {sig : Signature} {X : Variables} [BEq X]
+lemma Substitution.ne_subst_of_mem_dom_free {sig : Signature} {X : Variables} [BEq X] [BEq sig.funs]
+    (σ : Substitution sig X) (t : Term sig X) :
+    (∃ x ∈ σ.domain, x ∈ t.freeVars) → t ≠ t.substitute σ := by
+  intro ⟨x,⟨hxindom, hxinfree⟩⟩
+  simp_all
+  by_contra teqtsub
+  induction' t using Term.induction with x' args ih f
+  · rw [Term.substitute.eq_def] at teqtsub
+    simp_all
+    rw [symm teqtsub] at hxinfree
+    simp only [Term.freeVars] at hxinfree
+    subst hxinfree
+    simp_all only [not_true_eq_false]
+  · induction args with
+    | nil =>
+      simp [Term.freeVars] at hxinfree
+    | cons head tail ihargs =>
+      simp only [List.mem_cons, forall_eq_or_imp] at ih
+      obtain ⟨hxinheadimp, hforallintail⟩ := ih
+      have hxintailimp := ihargs hforallintail
+      simp only [Term.substitute, List.attach_cons, List.map_cons, List.map_map,
+        Function.comp_apply, List.map_subtype, List.unattach_attach, Term.func.injEq,
+        List.cons.injEq, true_and] at teqtsub
+      obtain ⟨hheqhsub, hteqsubt⟩ := teqtsub
+      by_cases hxinhead : x ∈ head.freeVars
+      · exact hxinheadimp hxinhead hheqhsub
+      · simp [List.mem_cons, List.cons_inj_right] at hxinfree
+        have hxintail : x ∈ (Term.func f tail).freeVars := or_iff_not_imp_left.mp hxinfree hxinhead
+        have htaileqsubtail := hxintailimp hxintail
+        simp only [Term.substitute, List.map_subtype, List.unattach_attach, Term.func.injEq,
+          true_and] at htaileqsubtail
+        exact htaileqsubtail hteqsubt
+
+@[simp]
+theorem idempotent_iff_inter_empty {sig : Signature} {X : Variables} [BEq X] [BEq sig.funs]
     (σ : Substitution sig X) : Idempotent σ ↔ σ.domain ∩ σ.codomain = ∅ := by
   apply Iff.intro
   -- Forward direction: If σ is idempotent, then its domain and codomain are disjoint.
   · intro hidem
-    simp [*] at hidem
     ext x
-    by_contra hinter
-    simp [*] at hinter
-    obtain ⟨hxindom : x ∈ σ.domain , hxincodom⟩ := hinter
-    obtain ⟨y, ⟨hyindom, hyinfree⟩⟩ := hxincodom
-    have h := congr_fun hidem y
-    /-
-    Do this by counter example:
-    σ={x ↦ y, z ↦ x} => σ.dom = {x, z}, σ.codom = {y, x} => x ∈ σ.codom
-    x maps to something that is not x
-    something maps to x
-    so applying once
-    use that σ z != (σ ∘ σ) z
-    -/
-    sorry
+    apply Iff.intro
+    · simp only [Set.mem_empty_iff_false]
+      intro ⟨hxindom, ⟨y, ⟨hyindom, hxinfree⟩⟩⟩
+      have hidemy := congr_fun hidem y
+      let t := σ y -- construct counterexample
+      have hexists : ∃ x ∈ σ.domain, x ∈ t.freeVars := by aesop
+      exact Substitution.ne_subst_of_mem_dom_free σ t hexists <| symm hidemy
+    · exact fun a ↦ False.elim a
   -- Reverse direction: If the domain and codomain are disjoint, then σ is idempotent.
   · intro h_inter_empty
     have h_disjoint_doms : Disjoint σ.domain σ.codomain := by
@@ -258,3 +303,9 @@ theorem idempotent_iff_empty_interesec {sig : Signature} {X : Variables} [BEq X]
       rw [Substitution.compose]
       refine Substitution.id_of_free_not_in_domain σ (σ x) ?_
       aesop
+
+/-
+Maybe continue with?
+3.3 LEMMA If a is an idempotent substitution and z is an arbitrary substitution, then a is
+more general than z iff za = z.
+-/
