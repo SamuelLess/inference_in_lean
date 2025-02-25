@@ -158,10 +158,15 @@ lemma unsat_as_set_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X
     (F : Formula sig X) : Unsatisfiable F → @SetUnsatisfiable sig X inst {F} := by simp
 
 theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (N : Set $ Formula sig X) (G : Formula sig X) :
+    (N : Set <| Formula sig X) (G : Formula sig X) :
     SetEntails N G ↔ @SetUnsatisfiable sig X inst (N ∪ {Formula.neg G}) := by
-  sorry
-
+  apply Iff.intro
+  · intro hNentailsG I β
+    specialize hNentailsG I β
+    by_cases hG : Formula.eval I β G <;> simp_all
+  · intro hGornegN I β hNvalid
+    cases hGornegN I β
+    aesop
 
 /-
 ### 3.3.4 Substitution Lemma
