@@ -4,32 +4,27 @@ set_option autoImplicit false
 --set_option diagnostics true
 
 open Syntax
+
+/- ## 3.2 Semantics
+Here, the syntatic definitions are expanded upon with semantic interpretations.  -/
+
 namespace Semantics
 
-/-
-## 3.2 Semantics
-
-### Σ-Algebra
-> A = (UA, (fA : UA n → UA )f/n∈Ω , (PA ⊆ UA m )P/m∈Π )
--/
-
 def Universes := Type
-/-
-A = (UA , (fA : UA n → UA )f/n∈Ω , (PA ⊆ UA m )P/m∈Π )
-Again this missses to check the arity of the functions and predicates.
--/
-structure Interpretation (sig : Signature) where
-  univ : Universes
+
+variable (sig : Signature) (X : Variables) (univ : Universes)
+
+/- A = (UA, (fA : UA n → UA)_f/n∈Ω, (PA ⊆ UA^m)P/m∈Π) -/
+structure Interpretation where
   functions : sig.funs -> (List univ -> univ)
   predicates : sig.preds -> (List univ -> Prop)
 
-/-
-### Assigments
+/- ### Assigments
 > β : X → univ
 -/
 
 @[simp]
-def Assignment (X : Variables) (univ : Universes) := X → univ
+def Assignment := X → univ
 
 @[simp]
 def Assignment.modify {X : Variables} {univ : Universes} [DecidableEq X]
@@ -38,7 +33,7 @@ def Assignment.modify {X : Variables} {univ : Universes} [DecidableEq X]
 
 -- β[x1 ↦ β(x1), ..., xn ↦ β(xn)] = β
 @[simp]
-def Assignment.modify_rfl {X : Variables} {univ : Universes} [DecidableEq X]
+lemma Assignment.modify_rfl [DecidableEq X]
     (β : Assignment X univ) (x : X) : β.modify x (β x) = β := by
   funext y
   rw [Assignment.modify]
@@ -54,20 +49,19 @@ def Assignment.modify_comm {X : Variables} {univ : Universes} [DecidableEq X]
   aesop
 
 @[simp]
-def Term.eval {sig : Signature} {X : Variables}
-    (I : Interpretation sig) (β : Assignment X I.univ) : @Term sig X -> I.univ
+def Term.eval {sig : Signature} {X : Variables} {univ : Universes}
+    (I : Interpretation sig univ) (β : Assignment X univ) : Term sig X -> univ
   | Term.var x => β x
   | Term.func f args => (I.functions f) <| args.attach.map (fun ⟨a, _⟩ => Term.eval I β a)
 
 @[simp]
-def Atom.eval {sig : Signature} {X : Variables}
-    (I : Interpretation sig) (β : Assignment X I.univ) : @Atom sig X -> Prop
+def Atom.eval {sig : Signature} {X : Variables} {univ : Universes}
+    (I : Interpretation sig univ) (β : Assignment X univ) : Atom sig X -> Prop
   | Atom.pred p args => (I.predicates p) (args.map (Term.eval I β))
-  | Atom.eq lhs rhs => Term.eval I β lhs = Term.eval I β rhs
 
 @[simp]
-def Formula.eval {sig : Signature} {X : Variables} [DecidableEq X]
-    (I : Interpretation sig) (β : Assignment X I.univ) : @Formula sig X -> Prop
+def Formula.eval {sig : Signature} {X : Variables} {univ : Universes} [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) : Formula sig X -> Prop
   | Formula.falsum => False
   | Formula.verum => True
   | Formula.atom a => Atom.eval I β a
@@ -76,8 +70,8 @@ def Formula.eval {sig : Signature} {X : Variables} [DecidableEq X]
   | Formula.or f g => Formula.eval I β f ∨ Formula.eval I β g
   | Formula.imp f g => Formula.eval I β f → Formula.eval I β g
   | Formula.iff f g => Formula.eval I β f ↔ Formula.eval I β g
-  | Formula.all x f => ∀ a : I.univ, Formula.eval I (β.modify x a) f
-  | Formula.ex x f => ∃ a : I.univ, Formula.eval I (β.modify x a) f
+  | Formula.all x f => ∀ a : univ, Formula.eval I (β.modify x a) f
+  | Formula.ex x f => ∃ a : univ, Formula.eval I (β.modify x a) f
 
 @[simp]
 def Formula.freeVars {sig : Signature} {X : Variables} : @Formula sig X -> Set X

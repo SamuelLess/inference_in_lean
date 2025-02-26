@@ -8,11 +8,10 @@ set_option autoImplicit false
 open Syntax
 open Semantics
 open Models
-namespace Unification
 
-/-
-### Unification
--/
+/- ### Unification -/
+
+namespace Unification
 
 @[simp]
 def Equality (sig : Signature) (X : Variables) :=
@@ -65,7 +64,11 @@ theorem unifiable_iff_mgu_idempot {sig : Signature} {X : Variables} [inst : Deci
     (E : EqualityProblem sig X) : Unifiable E ↔ ∃ σ : Substitution sig X,
       MostGeneralUnifier E σ ∧ Idempotent σ ∧ σ.domain ∪ σ.codomain ⊆ E.freeVars := by
   apply Iff.intro
-  · sorry -- this will need the standard unification algorithm
+  · sorry
+    /- This direction would need the standard unification algorithm.
+    I have played around with implementing it but it brings quite some chanllenge with it and feels
+    like it's outside the scope of this project.
+      -/
   · intro h
     obtain ⟨σ, ⟨⟨⟩⟩⟩ := h
     use σ

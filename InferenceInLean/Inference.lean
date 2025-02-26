@@ -10,25 +10,27 @@ open Syntax
 open Semantics
 open Models
 open Unification
-namespace Inferences
-/-
-### 3.7 Inference Systems and Proofs
--/
 
-/--
-We limit this to clausal proofs.
--/
-structure Inference (sig : Signature) (X : Variables) where
+/- ### 3.7 Inference Systems and Proofs -/
+
+namespace Inferences
+
+variable (sig : Signature) (X : Variables)
+
+/-- We limit this to clausal proofs. -/
+structure Inference where
   premises : Set (Clause sig X)
   conclusion : Clause sig X
   condition: Prop
 
-def InferenceSystem (sig : Signature) (X : Variables) := List (Inference sig X)
+def InferenceSystem := List (Inference sig X)
 
-instance {sig : Signature} {X : Variables} : Membership (Inference sig X) (InferenceSystem sig X) :=
+instance : Membership (Inference sig X) (InferenceSystem sig X) :=
   List.instMembership
 
-structure Proof {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) where
+variable {sig : Signature} {X : Variables} {univ : Universes}
+
+structure Proof (Γ : InferenceSystem sig X) where
   assumptions : Set (Clause sig X)
   conclusion : Clause sig X
   clauses : List (Clause sig X)
@@ -42,22 +44,20 @@ structure Proof {sig : Signature} {X : Variables} (Γ : InferenceSystem sig X) w
       ∀ Clause ∈ inference.premises, ∃ (j : ℕ) (hjindex : j < i), Clause = clauses[j]
 
 @[simp]
-def Provability {sig : Signature} {X : Variables}
-    (Γ : InferenceSystem sig X) (N : Set (Clause sig X)) (F : Clause sig X) : Prop :=
+def Provability (Γ : InferenceSystem sig X) (N : Set (Clause sig X)) (F : Clause sig X) : Prop :=
   ∃ proof : Proof Γ, proof.assumptions = N ∧ proof.conclusion = F
 
 @[simp]
-def Soundness {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (Γ : InferenceSystem sig X) : Prop :=
-  ∀ inference ∈ Γ, inference.condition → ClauseSetEntails inference.premises inference.conclusion
+def Soundness [inst : DecidableEq X] (Γ : InferenceSystem sig X) : Prop :=
+  ∀ inference ∈ Γ, inference.condition →
+    @ClauseSetEntails _ _ univ _ inference.premises inference.conclusion
 
 @[simp]
-def GeneralSoundness {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (Γ : InferenceSystem sig X) : Prop :=
-  ∀ (N : Set (Clause sig X)) (F : Clause sig X), Provability Γ N F → ClauseSetEntails N F
+def GeneralSoundness [inst : DecidableEq X] (Γ : InferenceSystem sig X) : Prop :=
+  ∀ (N : Set (Clause _ _)) (F : Clause _ _), Provability Γ N F → @ClauseSetEntails _ _ univ _ N F
 
-theorem generalSoundness_of_soundness {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (Γ : InferenceSystem sig X) : Soundness Γ → GeneralSoundness Γ := by
+theorem generalSoundness_of_soundness [inst : DecidableEq X]
+    (Γ : InferenceSystem sig X) : @Soundness _ _ univ _ Γ → @GeneralSoundness _ _ univ _ Γ := by
   intro hsound N F hproof A β hgstrue
   rcases hproof with ⟨proof, ⟨hassumptions, hconclusion⟩⟩
   have hproofsequencetrue : ∀ F ∈ proof.clauses, EntailsInterpret A β F := by

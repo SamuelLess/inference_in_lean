@@ -13,20 +13,18 @@ open Models
 open Unification
 open Inferences
 
+/- ### 3.8 Ground Resolution -/
+
 namespace Resolution
 
-/-
-### 3.8 Ground (or Propositional) Resolution
--/
+variable {sig : Signature} {X : Variables} {univ : Universes}
 
 @[simp]
-def GroundResolutionRule {sig : Signature} (A : Atom sig Empty) (C D : Clause sig Empty) :
-    Inference sig Empty :=
+def GroundResolutionRule (A : Atom sig Empty) (C D : Clause sig Empty) : Inference sig Empty :=
   ⟨{.pos A :: C, .neg A :: D}, C ++ D, True⟩
 
 @[simp]
-def GroundFactorizationRule {sig : Signature} (A : Atom sig Empty) (C : Clause sig Empty) :
-    Inference sig Empty :=
+def GroundFactorizationRule (A : Atom sig Empty) (C : Clause sig Empty) : Inference sig Empty :=
   ⟨{.pos A :: .pos A :: C}, .pos A :: C, True⟩
 
 /--
@@ -39,8 +37,8 @@ def GroundResolution (sig : Signature) (A : Atom sig Empty) (C D : Clause sig Em
     InferenceSystem sig Empty :=
   [GroundResolutionRule A C D, GroundFactorizationRule A C]
 
-lemma eval_append_iff_eval_or {sig : Signature} {X : Variables} [DecidableEq X]
-    {I : Interpretation sig} (β : Assignment X I.univ) (C D : Clause sig X):
+lemma eval_append_iff_eval_or [DecidableEq X]
+    {I : Interpretation sig univ} (β : Assignment X univ) (C D : Clause sig X):
     Formula.eval I β (↑(C ++ D)) ↔
     Formula.eval I β (Formula.or ↑C ↑D) := by
   induction' C with c cs ih generalizing D
@@ -60,9 +58,8 @@ lemma eval_append_iff_eval_or {sig : Signature} {X : Variables} [DecidableEq X]
       rw [ih]
       aesop
 
-theorem groundResolution_soundness {sig : Signature }
-    {A : Atom sig Empty} {C D : Clause sig Empty} : Soundness (GroundResolution sig A C D):= by
-  rw [Soundness]
+theorem groundResolution_soundness {A : Atom sig Empty} {C D : Clause sig Empty} :
+    @Soundness _ _ univ _ (GroundResolution sig A C D):= by
   intro rule h_rule_ground hcond I β h_premise_true
   simp [EntailsInterpret]
   simp_all only [GroundResolution, GroundResolutionRule, Clause, List.append_eq,
@@ -82,26 +79,21 @@ theorem groundResolution_soundness {sig : Signature }
     simp_all only [Clause, Set.mem_singleton_iff, Clause.toFormula, Formula.eval, Atom.eval,
       or_self_left, forall_eq]
 
-/-
-### 3.10 General Resolution
--/
+/- ### 3.10 General Resolution -/
 
 -- TODO: do we need to add that freeVars ∩ freeVars = ∅?
 @[simp]
-def GeneralResolutionRule {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (A B : Atom sig X) (C D : Clause sig X) :
+def GeneralResolutionRule [inst : DecidableEq X] (A B : Atom sig X) (C D : Clause sig X) :
     Inference sig X :=
   ⟨{.pos A :: C, .neg B :: D}, C ++ D, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
 
 @[simp]
-def GeneralFactorizationRule {sig : Signature} {X : Variables} [inst : DecidableEq X]
-  (A B : Atom sig X) (C : Clause sig X) :
+def GeneralFactorizationRule [inst : DecidableEq X] (A B : Atom sig X) (C : Clause sig X) :
     Inference sig X :=
   ⟨{.pos A :: .pos B :: C}, .pos A :: C, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
 
-theorem generalResolution_soundness {sig : Signature } {X : Variables} [inst : DecidableEq X]
-    {A B : Atom sig X} {C D : Clause sig X} :
-    Soundness ([GeneralResolutionRule A B C D, GeneralFactorizationRule A B C]):= by
+theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C D : Clause sig X} :
+    @Soundness _ _ univ _ ([GeneralResolutionRule A B C D, GeneralFactorizationRule A B C]):= by
   rw [Soundness]
   intro rule h_rule_ground hcond I β h_premise_true
   simp_all only [GeneralResolutionRule, Clause, List.append_eq, GeneralFactorizationRule,

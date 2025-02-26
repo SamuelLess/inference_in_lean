@@ -6,104 +6,100 @@ set_option autoImplicit false
 
 open Syntax
 open Semantics
+
+/- ## 3.3 Models, Validity, and Satisfiability -/
+
 namespace Models
 
+variable {sig : Signature} {X : Variables} {univ : Universes}
 
-/-
-## 3.3 Models, Validity, and Satisfiability
-
-### Σ-Algebra A with assignment β
+/- ### Σ-Algebra A with assignment β
 > I, β ⊨ F :⇔ I(β)(F) = True
 -/
 
 @[simp]
-def EntailsInterpret {sig : Signature} {X: Variables} [DecidableEq X]
-    (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) : Prop :=
+def EntailsInterpret [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) (F : Formula sig X) : Prop :=
   Formula.eval I β F
 
-theorem not_entails_not {sig : Signature} {X : Variables} [DecidableEq X]
-    (I : @Interpretation sig) (β : Assignment X I.univ) (F : @Formula sig X) :
+theorem not_entails_not [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) (F : Formula sig X) :
     EntailsInterpret I β F → ¬EntailsInterpret I β (Formula.neg F) :=
   fun a a_1 ↦ a_1 a
 
-/-
-### Validity / Tautology
+/- ### Validity / Tautology
 > ⊨ F :⇔ A |= F for all A ∈ Σ-Alg
 -/
-@[simp]
-def Valid {sig : Signature} {X : Variables} [DecidableEq X] (F : @Formula sig X) : Prop :=
-  ∀ (I : @Interpretation sig) (β : Assignment X I.univ), Formula.eval I β F
 
-/-
-### Entailment
+@[simp]
+def Valid [DecidableEq X] (F : Formula sig X) : Prop :=
+  ∀ (I : Interpretation sig univ) (β : Assignment X univ), Formula.eval I β F
+
+/- ### Entailment
 F ⊨ G, if for all A ∈ Σ-Alg and β ∈ X → UA, we have A, β |= F ⇒ A, β |= G
 -/
+
 @[simp]
-def Entails {sig : Signature} {X : Variables} [DecidableEq X] (F G : @Formula sig X) : Prop :=
-  ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+def Entails [DecidableEq X] (F G : Formula sig X) : Prop :=
+  ∀ (I : Interpretation sig univ) (β : Assignment X univ),
     EntailsInterpret I β F → EntailsInterpret I β G
 infix:60 " ⊨ " => Entails
 
-
-/-
-### Equivalence
+/- ### Equivalence
 
 ##### Proposition 3.3.1
 > F ⊨ G if and only if F → G is valid`
 -/
-theorem entails_iff_imp_valid {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (F G : Formula sig X) : Entails F G ↔ @Valid sig X inst (Formula.imp F G) :=
+theorem entails_iff_imp_valid [inst : DecidableEq X]
+    (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @Valid _ _ univ _ (Formula.imp F G) :=
   Eq.to_iff rfl
 
 
-/-
-### Sat
--/
+/- ### Sat -/
 @[simp]
-def Satisfiable {sig : Signature} {X : Variables} [DecidableEq X] (F : @Formula sig X) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ), EntailsInterpret I β F
+def Satisfiable [DecidableEq X] (F : Formula sig X) : Prop :=
+  ∃ (I : Interpretation sig univ) (β : Assignment X univ), EntailsInterpret I β F
 
 @[simp]
-def Unsatisfiable {sig : Signature} {X : Variables} [DecidableEq X] (F : @Formula sig X) : Prop :=
-  ¬Satisfiable F
+def Unsatisfiable [DecidableEq X] (F : Formula sig X) : Prop :=
+  ¬@Satisfiable _ X univ _ F
 
-theorem valid_iff_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (F : Formula sig X) : Valid F ↔ @Unsatisfiable sig X inst (Formula.neg F) := by simp
+theorem valid_iff_not_unsat [inst : DecidableEq X]
+    (F : Formula sig X) : @Valid _ _ univ _ F ↔ @Unsatisfiable _ _ univ _ (Formula.neg F) := by simp
 
-theorem entails_iff_and_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (F G : Formula sig X) :
-    Entails F G ↔ @Unsatisfiable sig X inst (Formula.and F (Formula.neg G)) := by simp
+theorem entails_iff_and_not_unsat [inst : DecidableEq X] (F G : Formula sig X) :
+    @Entails _ _ univ _ F G ↔ @Unsatisfiable _ _ univ _ (Formula.and F (Formula.neg G)) := by simp
 
 @[simp]
-def Literal.satisfied_by {sig : Signature} {X: Variables} [DecidableEq X]
-    (L : Literal sig X) (I : Interpretation sig) (β : Assignment X I.univ) : Prop :=
+def Literal.satisfied_by [DecidableEq X]
+    (L : Literal sig X) (I : Interpretation sig univ) (β : Assignment X univ) : Prop :=
   EntailsInterpret I β <| match L with
     | Literal.pos a => Formula.atom a
     | Literal.neg a => Formula.neg (Formula.atom a)
 
 @[simp]
-def SetEntails {sig : Signature} {X : Variables} [DecidableEq X]
+def SetEntails [DecidableEq X]
     (N : Set (Formula sig X)) (F : Formula sig X) : Prop :=
-  ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+  ∀ (I : Interpretation sig univ) (β : Assignment X univ),
     (∀ G ∈ N, EntailsInterpret I β G) → EntailsInterpret I β F
 
 @[simp]
-def ClauseSetEntails {sig : Signature} {X : Variables} [DecidableEq X]
+def ClauseSetEntails [DecidableEq X]
     (N : Set <| Clause sig X) (C : Clause sig X) : Prop :=
-  ∀ (I : @Interpretation sig) (β : Assignment X I.univ),
+  ∀ (I : Interpretation sig univ) (β : Assignment X univ),
     (∀ D ∈ N, EntailsInterpret I β D) → EntailsInterpret I β C
 
-lemma entails_setEntails {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (F G : Formula sig X) : Entails F G ↔ @SetEntails sig X inst {F} G := by simp
+lemma entails_setEntails [inst : DecidableEq X]
+    (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @SetEntails _ X univ _ {F} G := by simp
 
 @[simp]
-def ClauseSatisfiable {sig : Signature} {X : Variables} [DecidableEq X] (C : Clause sig X) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
+def ClauseSatisfiable [DecidableEq X] (C : Clause sig X) : Prop :=
+  ∃ (I : Interpretation sig univ) (β : Assignment X univ),
     ∃ L : Literal sig X, L ∈ C ∧ Literal.satisfied_by L I β
 
 @[simp]
-theorem ClauseSatisfiable_imp_Satisfiable {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (C : Clause sig X) : ClauseSatisfiable C → @Satisfiable sig X inst ↑C := by
+theorem ClauseSatisfiable_imp_Satisfiable [inst : DecidableEq X]
+    (C : Clause sig X) : @ClauseSatisfiable _ _ univ _ C → @Satisfiable sig X univ _ ↑C := by
   simp only [ClauseSatisfiable, Assignment, Satisfiable, EntailsInterpret]
   intro ⟨I, ⟨β, ⟨L, ⟨h_L_in_C, hsatby⟩⟩⟩⟩
   use I, β
@@ -129,37 +125,33 @@ theorem ClauseSatisfiable_imp_Satisfiable {sig : Signature} {X : Variables} [ins
         exact ih h_in_tail
 
 @[simp]
-def SetSatisfiable {sig : Signature} {X : Variables} [DecidableEq X]
-    (N : Set (@Formula sig X)) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ), ∀ G ∈ N, EntailsInterpret I β G
+def SetSatisfiable [DecidableEq X] (N : Set (@Formula sig X)) : Prop :=
+  ∃ (I : Interpretation sig univ) (β : Assignment X univ), ∀ G ∈ N, EntailsInterpret I β G
 
 @[simp]
-def ClauseSetSatisfiableByLiterals {sig : Signature} {X : Variables} [DecidableEq X]
-    (N : Set <| Clause sig X) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ),
+def ClauseSetSatisfiableByLiterals [DecidableEq X] (N : Set <| Clause sig X) : Prop :=
+  ∃ (I : Interpretation sig univ) (β : Assignment X univ),
     ∀ C ∈ N, ∃ L ∈ C, Literal.satisfied_by L I β
 
 @[simp]
-def ClauseSetSatisfiable {sig : Signature} {X : Variables} [DecidableEq X]
-    (N : Set <| Clause sig X) : Prop :=
-  ∃ (I : @Interpretation sig) (β : Assignment X I.univ), ∀ G ∈ N, EntailsInterpret I β G
+def ClauseSetSatisfiable [DecidableEq X] (N : Set <| Clause sig X) : Prop :=
+  ∃ (I : Interpretation sig univ) (β : Assignment X univ), ∀ G ∈ N, EntailsInterpret I β G
 
 @[simp]
-def SetUnsatisfiable {sig : Signature} {X : Variables} [DecidableEq X]
-    (N : Set (@Formula sig X)) : Prop :=
-  ∀ (I : @Interpretation sig) (β : Assignment X I.univ), ∃ G ∈ N, ¬EntailsInterpret I β G
+def SetUnsatisfiable [DecidableEq X] (N : Set (@Formula sig X)) : Prop :=
+  ∀ (I : Interpretation sig univ) (β : Assignment X univ), ∃ G ∈ N, ¬EntailsInterpret I β G
 
-lemma sat_as_set_sat {sig : Signature} {X : Variables} [inst : DecidableEq X] (F : Formula sig X) :
-    Satisfiable F → @SetSatisfiable sig X inst {F} :=
+lemma sat_as_set_sat [inst : DecidableEq X] (F : Formula sig X) :
+    @Satisfiable _ _ univ _ F → @SetSatisfiable _ _ univ _ {F} :=
   by simp only [Satisfiable, Assignment, EntailsInterpret, SetSatisfiable, Set.mem_singleton_iff,
     forall_eq, imp_self]
 
-lemma unsat_as_set_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (F : Formula sig X) : Unsatisfiable F → @SetUnsatisfiable sig X inst {F} := by simp
+lemma unsat_as_set_unsat [inst : DecidableEq X]
+    (F : Formula sig X) : @Unsatisfiable _ _ univ _ F → @SetUnsatisfiable _ _ univ _ {F} := by simp
 
-theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst : DecidableEq X]
+theorem setEntails_iff_union_not_unsat [inst : DecidableEq X]
     (N : Set <| Formula sig X) (G : Formula sig X) :
-    SetEntails N G ↔ @SetUnsatisfiable sig X inst (N ∪ {Formula.neg G}) := by
+    @SetEntails _ _ univ _ N G ↔ @SetUnsatisfiable _ _ univ _ (N ∪ {Formula.neg G}) := by
   apply Iff.intro
   · intro hNentailsG I β
     specialize hNentailsG I β
@@ -168,19 +160,17 @@ theorem setEntails_iff_union_not_unsat {sig : Signature} {X : Variables} [inst :
     cases hGornegN I β
     aesop
 
-/-
-### 3.3.4 Substitution Lemma
--/
+/- ### 3.3.4 Substitution Lemma -/
 @[simp]
-def Assignment.compose {sig : Signature} {X : Variables} [DecidableEq X]
-    (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
-    I.univ :=
+def Assignment.compose [DecidableEq X] (I : Interpretation sig univ) (β : Assignment X univ)
+    (σ : Substitution sig X) (t : Term sig X) :
+    univ :=
   match t with
   | Term.var x => Term.eval I β (σ x)
   | Term.func f args => I.functions f <| args.attach.map (fun ⟨a, _⟩ => Assignment.compose I β σ a)
 
-theorem substitution_lemma {sig : Signature} {X : Variables} [DecidableEq X]
-    (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
+theorem substitution_lemma [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (t : Term _ _) :
     Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
   match t with
   | .var x => simp_all only [Term.substitute, Assignment.compose]
@@ -197,8 +187,8 @@ theorem substitution_lemma {sig : Signature} {X : Variables} [DecidableEq X]
     rw [hargsareequal]
 
 -- equivalent proof to show that the induction lemma we defined for terms actually works
-theorem substitution_lemma' {sig : Signature} {X : Variables} [DecidableEq X]
-    (I : Interpretation sig) (β : Assignment X I.univ) (σ : Substitution sig X) (t : Term sig X) :
+theorem substitution_lemma' [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (t : Term _ _) :
     Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
   induction' t using Term.induction with x args ih f
   · simp only [Term.substitute, Assignment.compose]
@@ -211,17 +201,15 @@ theorem substitution_lemma' {sig : Signature} {X : Variables} [DecidableEq X]
       simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
     rw [hargsarequal]
 
-/-
-### Lemma 3.3.7
--/
+/- ### Lemma 3.3.7 -/
 --(hfree : ∀ x ∈ xs, x ∈ F.freeVars)
-lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X] (n : ℕ)
+lemma three_three_seven [DecidableEq X] (n : ℕ)
     (F : Formula sig X) (xs : List X) (huniq : xs.Nodup) (hn : xs.length = n) :
-    Valid (Formula.bigForall xs F) ↔ Valid F := by
+    @Valid _ _ univ _ (Formula.bigForall _ _ xs F) ↔ @Valid  _ _ univ _ F := by
   apply Iff.intro
   · intro hvalid I γ
     specialize hvalid I
-    have hlemma (as : List I.univ) (hlen : xs.length = as.length) :
+    have hlemma (as : List univ) (hlen : xs.length = as.length) :
         Formula.eval I (Assignment.bigModify γ xs as) F := by
       induction' n with n ih generalizing γ xs as
       · have h : xs = [] := by exact List.length_eq_zero.mp hn
@@ -234,7 +222,7 @@ lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X] (n : �
         | x :: xs, a :: as =>
           rw [Assignment.bigModify]
           have hstillvalid :
-              ∀ (β : Assignment X I.univ), Formula.eval I β (Formula.bigForall xs F) := by
+              ∀ (β : Assignment X univ), Formula.eval I β (Formula.bigForall _ _ xs F) := by
             intro β
             rw [Formula.bigForall] at hvalid
             specialize hvalid β
@@ -248,7 +236,7 @@ lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X] (n : �
         | [], [] =>
           simp_all only [List.nodup_nil, Assignment, Formula.bigForall, List.length_nil,
             Assignment.bigModify, implies_true, Nat.add_one_ne_zero]
-    set as : List I.univ := List.map γ xs with has
+    set as : List univ := List.map γ xs with has
     have hsubequal : γ = Assignment.bigModify γ xs as := by
       exact Assignment.substitute_equality γ xs
     rw [hsubequal]
@@ -263,16 +251,13 @@ lemma three_three_seven {sig : Signature} {X : Variables} [DecidableEq X] (n : �
       specialize ih (n - 1) (List.Nodup.of_cons huniq) (Nat.eq_sub_of_add_eq hn) (β.modify x a)
       exact ih
 
-/-
-### Lemma 3.3.8
--/
+/- ### Lemma 3.3.8 -/
 lemma three_three_eight {sig : Signature} {X : Variables} [DecidableEq X] (n m : ℕ)
     (C : Clause sig X) (xs : List X) (hxuniq : xs.Nodup) (hn : xs.length = n)
     (σ : Substitution sig X) (ys : List X) (hyuniq : ys.Nodup) (hm : ys.length = m) :
-    Valid (Formula.bigForall xs C.toFormula) →
-      Valid (Formula.bigForall ys (C.substitute σ).toFormula) := by
+    @Valid _ _ univ _ (Formula.bigForall _ _ xs C.toFormula) →
+      @Valid _ _ univ _ (Formula.bigForall _ _ ys (C.substitute σ).toFormula) := by
   intro h
   have := (three_three_seven n C.toFormula xs hxuniq hn).mp h
-  have := (three_three_seven m (C.substitute σ).toFormula ys hyuniq hm).mpr
-  apply this
+  apply (three_three_seven m (C.substitute σ).toFormula ys hyuniq hm).mpr
   sorry -- use 3.3.5 (see lecture notes)

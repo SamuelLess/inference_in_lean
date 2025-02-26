@@ -2,16 +2,10 @@ import Mathlib.Data.Set.Basic
 import Mathlib.Data.Finset.Range
 
 set_option autoImplicit false
---set_option diagnostics true
 
-/-
-## 3.1 Syntax
-### Syntax:
-- nonlogical symbols (domain-specific)
--> terms, atomic formulas
-- logical connectives (domain-independent)
--> Boolean combinations, quantifiers
--/
+/- ## 3.1 Syntax
+In the following only syntactical notions are defined. -/
+
 namespace Syntax
 
 structure Signature where
@@ -22,11 +16,13 @@ structure Signature where
 
 def Variables := Type
 
-inductive Term (sig : Signature) (X : Variables) where
-  | var (x : X)
-  | func (f : sig.funs) (args: List (Term sig X))
+variable (sig : Signature) (X : Variables)
 
-lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Prop}
+inductive Term where
+  | var (x : X)
+  | func (f : sig.funs) (args: List Term)
+
+lemma Term.induction {P : (Term sig X) → Prop}
     (base : ∀ x : X, P (var x)) (step : ∀ (args : List (Term sig X)),
       (ih : ∀ term ∈ args, P term) → ∀ (f : sig.funs), P (func f args)) :
     ∀ (t : Term sig X), P t := by
@@ -44,12 +40,12 @@ lemma Term.induction {sig : Signature} {X : Variables} {P : (Term sig X) → Pro
       exact ih term' harg'
 
 mutual
-  def eqTerm {sig : Signature} {X : Variables} [instX : BEq X] [instF : BEq sig.funs] :
+  def eqTerm [instX : BEq X] [instF : BEq sig.funs] :
       Term sig X → Term sig X → Bool
     | Term.var x, Term.var y => x == y
     | Term.func f fargs, Term.func g gargs => f == g && eqArgs fargs gargs
     | _, _ => false
-  def eqArgs {sig : Signature} {X : Variables} [instX : BEq X] [instF : BEq sig.funs] :
+  def eqArgs [instX : BEq X] [instF : BEq sig.funs] :
       List (Term sig X) → List (Term sig X) → Bool
     | [], [] => true
     | [], _ => false
@@ -57,82 +53,80 @@ mutual
     | x :: xs, y :: ys => eqTerm x y && eqArgs xs ys
 end
 
-instance {sig : Signature} {X : Variables} [instX : BEq X] [instF : BEq sig.funs] :
+instance [instX : BEq X] [instF : BEq sig.funs] :
     BEq (Term sig X) :=
-  ⟨eqTerm⟩
+  ⟨eqTerm sig X⟩
 
 @[simp]
-def Term.freeVars {sig : Signature} {X : Variables} : Term sig X -> Set X
+def Term.freeVars : Term sig X -> Set X
   | .var x => {x}
   | .func _ [] => ∅
   | .func f (a :: args) => Term.freeVars a ∪ Term.freeVars (Term.func f args)
 
-inductive Atom (sig : Signature) (X : Variables) where
+inductive Atom where
   | pred (p : sig.preds) (args : List (Term sig X))
-  | eq (lhs rhs : Term sig X)
 
 @[simp]
 def Atom.freeVars {sig : Signature} {X : Variables} : Atom sig X -> Set X
-  | .pred _ args => args.foldl (fun acc t => acc ∪ Term.freeVars t) ∅
-  | .eq lhs rhs => Term.freeVars lhs ∪ Term.freeVars rhs
+  | .pred _ args => args.foldl (fun acc t => acc ∪ Term.freeVars sig X t) ∅
 
-inductive Literal (sig : Signature) (X : Variables) where
+inductive Literal where
   | pos (a : Atom sig X)
   | neg (a : Atom sig X)
 
 @[simp]
-def Literal.comp {sig : Signature} {X : Variables} : Literal sig X -> Literal sig X
+def Literal.comp : Literal sig X -> Literal sig X
   | .pos a => .neg a
   | .neg a => .pos a
 
 @[simp]
-def Clause (sig : Signature) (X : Variables) := List (Literal sig X)
+def Clause := List (Literal sig X)
 
-instance {sig : Signature} {X : Variables} : Membership (Literal sig X) (Clause sig X) :=
+instance : Membership (Literal sig X) (Clause sig X) :=
   List.instMembership
 
-instance {sig : Signature} {X : Variables} : Append (Clause sig X) :=
+instance : Append (Clause sig X) :=
   List.instAppend
 
-instance {sig : Signature} {X : Variables} : HAppend (Clause sig X) (Clause sig X) (Clause sig X) :=
+instance : HAppend (Clause sig X) (Clause sig X) (Clause sig X) :=
   instHAppendOfAppend
 
-inductive Formula (sig: Signature) (X: Variables) where
+inductive Formula where
   | falsum
   | verum
   | atom (a : Atom sig X)
-  | neg (f : Formula sig X)
-  | and (f g : Formula sig X)
-  | or (f g : Formula sig X)
-  | imp (f g : Formula sig X)
-  | iff (f g : Formula sig X)
-  | all (x : X) (f : Formula sig X)
-  | ex (x : X) (f : Formula sig X)
+  | neg (f : Formula)
+  | and (f g : Formula)
+  | or (f g : Formula)
+  | imp (f g : Formula)
+  | iff (f g : Formula)
+  | all (x : X) (f : Formula)
+  | ex (x : X) (f : Formula)
 
 /--
  Creates formula ∀ x_1 ... x_n, F.
 -/
 @[simp]
-def Formula.bigForall {sig : Signature} {X : Variables} [DecidableEq X]
+def Formula.bigForall [DecidableEq X]
     (xs : List X) (F : Formula sig X) : Formula sig X :=
   match xs with
   | [] => F
   | x :: xs => .all x (F.bigForall xs)
 
 @[simp]
-def Clause.toFormula {sig : Signature} {X : Variables} : Clause sig X -> Formula sig X
+def Clause.toFormula : Clause sig X -> Formula sig X
   | [] => Formula.falsum
   | .pos l :: ls => Formula.or (Formula.atom l) (Clause.toFormula ls)
   | .neg l :: ls => Formula.or (Formula.neg (Formula.atom l)) (Clause.toFormula ls)
 
-instance {sig : Signature} {X : Variables} : Coe (Clause sig X) (Formula sig X) :=
-  ⟨Clause.toFormula⟩
+instance : Coe (Clause sig X) (Formula sig X) :=
+  ⟨Clause.toFormula sig X⟩
 
-instance {sig : Signature} {X : Variables} : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
-  ⟨fun N => {Clause.toFormula C | C ∈ N}⟩
+instance : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
+  ⟨fun N => {↑C | C ∈ N}⟩
 
 @[simp]
-def Substitution (sig : Signature) (X : Variables) := X -> Term sig X
+def Substitution := X -> Term sig X
 
 @[simp]
 def Substitution.modify {sig : Signature} {X : Variables} [DecidableEq X]
@@ -149,7 +143,6 @@ def Term.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) 
 def Atom.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) :
     Atom sig X -> Atom sig X
   | Atom.pred p ts => Atom.pred p (ts.map (Term.substitute σ))
-  | Atom.eq lhs rhs => Atom.eq (lhs.substitute σ) (rhs.substitute σ)
 
 @[simp]
 def Literal.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) :
