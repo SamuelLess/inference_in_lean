@@ -19,6 +19,9 @@ structure Interpretation where
   functions : sig.funs -> (List univ -> univ)
   predicates : sig.preds -> (List univ -> Prop)
 
+def HerbrandInterpretation (sig : Signature) (preds : sig.preds -> List (Term sig Empty) -> Prop) :
+    Interpretation sig (Term sig Empty) := ⟨fun f args => Term.func f args, preds⟩
+
 /- ### Assigments
 > β : X → univ
 -/
