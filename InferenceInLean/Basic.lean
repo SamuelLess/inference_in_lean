@@ -58,6 +58,17 @@ lemma eval_append_iff_eval_or [DecidableEq X]
       rw [ih]
       aesop
 
+lemma eval_append_iff_eval_or_subst [DecidableEq X] {I : Interpretation sig univ}
+    (β : Assignment X univ) (C D : Clause sig X) (σ : Substitution sig X):
+    Formula.eval I β ↑((C ++ D).substitute σ) ↔
+    Formula.eval I β (Formula.or ↑(C.substitute σ) ↑(D.substitute σ)) := by
+  induction' C with c cs ih generalizing D
+  · simp_all only [Clause.substitute, Clause, List.nil_append, Formula.eval, List.map_nil,
+      Clause.toFormula, false_or]
+  · match c with
+    | .pos a => aesop
+    | .neg a => aesop
+
 theorem groundResolution_soundness {A : Atom sig Empty} {C D : Clause sig Empty} :
     @Soundness _ _ univ _ (GroundResolution sig A C D):= by
   intro rule h_rule_ground hcond I β h_premise_true
@@ -83,23 +94,27 @@ theorem groundResolution_soundness {A : Atom sig Empty} {C D : Clause sig Empty}
 
 -- TODO: do we need to add that freeVars ∩ freeVars = ∅?
 @[simp]
-def GeneralResolutionRule [inst : DecidableEq X] (A B : Atom sig X) (C D : Clause sig X) :
+def GeneralResolutionRule [inst : DecidableEq X] (A B : Atom sig X) (C D : Clause sig X)
+    (σ : Substitution sig X) :
     Inference sig X :=
-  ⟨{.pos A :: C, .neg B :: D}, C ++ D, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
+  ⟨{.neg A :: C, .pos B :: D}, (C ++ D).substitute σ, MostGeneralUnifier [(A, B)] σ⟩
 
 @[simp]
-def GeneralFactorizationRule [inst : DecidableEq X] (A B : Atom sig X) (C : Clause sig X) :
+def GeneralFactorizationRule [inst : DecidableEq X] (A B : Atom sig X) (C : Clause sig X)
+    (σ : Substitution sig X) :
     Inference sig X :=
-  ⟨{.pos A :: .pos B :: C}, .pos A :: C, ∃ σ : Substitution sig X, MostGeneralUnifier [(A, B)] σ⟩
+  ⟨{.pos A :: .pos B :: C}, Clause.substitute σ (.pos A :: C), MostGeneralUnifier [(A, B)] σ⟩
 
-theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C D : Clause sig X} :
-    @Soundness _ _ univ _ ([GeneralResolutionRule A B C D, GeneralFactorizationRule A B C]):= by
+theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C D : Clause sig X}
+    {σ : Substitution sig X} :
+    @Soundness _ _ univ _ ([GeneralResolutionRule A B C D σ, GeneralFactorizationRule A B C σ]):= by
   rw [Soundness]
-  intro rule h_rule_ground hcond I β h_premise_true
-  simp_all only [GeneralResolutionRule, Clause, List.append_eq, GeneralFactorizationRule,
-    EntailsInterpret]
-  rw [List.mem_cons, List.mem_singleton] at h_rule_ground
-  cases h_rule_ground
+  intro rule h_rule_general hcond I
+
+  intro β h_premise_true
+  simp_all only [GeneralResolutionRule, Clause, List.append_eq, GeneralFactorizationRule]
+  rw [List.mem_cons, List.mem_singleton] at h_rule_general
+  cases h_rule_general
   -- proof of resolution rule
   next h_res_rule =>
     subst h_res_rule
@@ -107,10 +122,21 @@ theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C
     simp_all only [Clause, GeneralResolutionRule, List.append_eq, Substitution.eq_1,
       MostGeneralUnifier, Unifier, Equality.eq_1, EqualityProblem.eq_1, List.mem_singleton,
       forall_eq, MoreGeneral, Set.mem_insert_iff, Set.mem_singleton_iff,
-      EntailsInterpret, forall_eq_or_imp, Clause.toFormula, Formula.eval]
-    rcases hcond with ⟨σ, hunif, hmgu⟩
+      EntailsInterpret, forall_eq_or_imp]
+    rcases hcond with ⟨hunif, hmgu⟩
+    repeat rw [← EntailsInterpret] at h_premise_true
     clear hmgu
-    sorry
+    rw [eval_append_iff_eval_or_subst, Formula.eval]
+    obtain ⟨first, second⟩ := h_premise_true
+    have hclosed : Formula.closed (Clause.toFormula sig X (Literal.neg A :: C)) := sorry
+    have hclosed₂ : Formula.closed (Clause.toFormula sig X (Literal.pos B :: D)) := sorry
+    have s := validIn_of_entails_closed I _ hclosed (by use β)
+    have t := validIn_of_entails_closed I _ hclosed₂ (by use β)
+    apply valid_sub_of_valid _ σ at s
+    apply valid_sub_of_valid _ σ at t
+    specialize s β
+    specialize t β
+    aesop
   next h_fact_rule =>
     sorry
 

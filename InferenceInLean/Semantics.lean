@@ -76,18 +76,23 @@ def Formula.eval {sig : Signature} {X : Variables} {univ : Universes} [Decidable
   | Formula.all x f => ∀ a : univ, Formula.eval I (β.modify x a) f
   | Formula.ex x f => ∃ a : univ, Formula.eval I (β.modify x a) f
 
+lemma Formula.eval_of_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
+    (∀ (β γ : Assignment X univ), Formula.eval I β F = Formula.eval I γ F) := by
+  intro β γ
+  sorry
+
 @[simp]
-def Formula.freeVars {sig : Signature} {X : Variables} : @Formula sig X -> Set X
-  | Formula.falsum => ∅
-  | Formula.verum => ∅
-  | Formula.atom a => Atom.freeVars a
-  | Formula.neg f => Formula.freeVars f
-  | Formula.and f g => Formula.freeVars f ∪ Formula.freeVars g
-  | Formula.or f g => Formula.freeVars f ∪ Formula.freeVars g
-  | Formula.imp f g => Formula.freeVars f ∪ Formula.freeVars g
-  | Formula.iff f g => Formula.freeVars f ∪ Formula.freeVars g
-  | Formula.all x f => Formula.freeVars f \ {x}
-  | Formula.ex x f => Formula.freeVars f \ {x}
+def Term.eval_without_free {sig : Signature} {X : Variables} [DecidableEq X] (t : Term sig X) :
+    t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by
+  intro a
+  simp_all only [not_exists]
+  intro x
+  apply Aesop.BuiltinRules.not_intro
+  intro a_1
+  subst a_1
+  simp_all only [Term.freeVars.eq_1, Set.singleton_ne_empty]
+
 
 -- β[x1 ↦ a1, ..., xn ↦ an]
 @[simp]

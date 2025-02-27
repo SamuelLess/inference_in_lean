@@ -103,6 +103,22 @@ inductive Formula where
   | all (x : X) (f : Formula)
   | ex (x : X) (f : Formula)
 
+@[simp]
+def Formula.freeVars {sig : Signature} {X : Variables} : @Formula sig X -> Set X
+  | Formula.falsum => ∅
+  | Formula.verum => ∅
+  | Formula.atom a => Atom.freeVars a
+  | Formula.neg f => Formula.freeVars f
+  | Formula.and f g => Formula.freeVars f ∪ Formula.freeVars g
+  | Formula.or f g => Formula.freeVars f ∪ Formula.freeVars g
+  | Formula.imp f g => Formula.freeVars f ∪ Formula.freeVars g
+  | Formula.iff f g => Formula.freeVars f ∪ Formula.freeVars g
+  | Formula.all x f => Formula.freeVars f \ {x}
+  | Formula.ex x f => Formula.freeVars f \ {x}
+
+@[simp]
+def Formula.closed {sig : Signature} {X : Variables} (F : Formula sig X) : Prop :=
+  Formula.freeVars F = ∅
 /--
  Creates formula ∀ x_1 ... x_n, F.
 -/

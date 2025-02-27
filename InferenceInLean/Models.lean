@@ -27,6 +27,10 @@ theorem not_entails_not [DecidableEq X]
     EntailsInterpret I β F → ¬EntailsInterpret I β (Formula.neg F) :=
   fun a a_1 ↦ a_1 a
 
+@[simp]
+def ValidIn [DecidableEq X] (F : Formula sig X) (I : Interpretation sig univ) : Prop :=
+  ∀ (β : Assignment X univ), EntailsInterpret I β F
+
 /- ### Validity / Tautology
 > ⊨ F :⇔ A |= F for all A ∈ Σ-Alg
 -/
@@ -160,104 +164,206 @@ theorem setEntails_iff_union_not_unsat [inst : DecidableEq X]
     cases hGornegN I β
     aesop
 
+/- lemma term_eval_of_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
+  (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) : -/
+
+/- lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
+    (∃ (β : Assignment X univ), EntailsInterpret I β F) → ValidIn F I := by -/
+
+lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
+    (∃ (β : Assignment X univ), EntailsInterpret I β F) → ValidIn F I := by
+  intro hβ β
+  rcases hβ with ⟨γ, hγ⟩
+  have heval := Formula.eval_of_closed _ I F hclosed β γ
+  rw [EntailsInterpret, heval, ← EntailsInterpret]
+  exact hγ
+
 /- ### 3.3.4 Substitution Lemma -/
 @[simp]
 def Assignment.compose [DecidableEq X] (I : Interpretation sig univ) (β : Assignment X univ)
+    (σ : Substitution sig X) : Assignment X univ :=
+  fun x ↦ Term.eval I β (σ x)
+
+@[simp]
+def Assignment.compose_term [DecidableEq X] (I : Interpretation sig univ) (β : Assignment X univ)
     (σ : Substitution sig X) (t : Term sig X) :
     univ :=
   match t with
   | Term.var x => Term.eval I β (σ x)
-  | Term.func f args => I.functions f <| args.attach.map (fun ⟨a, _⟩ => Assignment.compose I β σ a)
+  | Term.func f args => I.functions f <| args.attach.map (fun ⟨a, _⟩ =>
+    Assignment.compose_term I β σ a)
+
+lemma Assignment.compose_term_eq_eval_compose [DecidableEq X] (I : Interpretation sig univ)
+    (β : Assignment X univ) (σ : Substitution sig X) (t : Term sig X) :
+    Assignment.compose_term I β σ t = Term.eval I (Assignment.compose I β σ) t := by
+  induction' t using Term.induction with x args ih f
+  · simp_all only [compose_term, Term.eval.eq_1, compose]
+  · simp_all only [compose_term, List.map_subtype, List.unattach_attach, Term.eval.eq_2]
 
 theorem substitution_lemma [DecidableEq X]
     (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (t : Term _ _) :
-    Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
-  match t with
-  | .var x => simp_all only [Term.substitute, Assignment.compose]
-  | .func f args =>
-    simp only [Term.substitute, List.map_subtype, List.unattach_attach, Term.eval,
-      List.mem_map, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, List.map_map,
-      Assignment.compose]
-    have hargsareequal :
-        List.map (Term.eval I β ∘ .substitute σ) args = .map (Assignment.compose I β σ) args := by
-      simp only [List.map_inj_left, Function.comp_apply]
-      intro t hargs
-      have h := substitution_lemma I β σ t
-      simp_all only
-    rw [hargsareequal]
-
--- equivalent proof to show that the induction lemma we defined for terms actually works
-theorem substitution_lemma' [DecidableEq X]
-    (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (t : Term _ _) :
-    Term.eval I β (t.substitute σ) = Assignment.compose I β σ t := by
+    Term.eval I β (t.substitute σ) = Term.eval I (Assignment.compose I β σ) t := by
+  rw [← Assignment.compose_term_eq_eval_compose]
   induction' t using Term.induction with x args ih f
-  · simp only [Term.substitute, Assignment.compose]
-  · rw [Assignment.compose, Term.substitute]
+  · simp_all only [Term.substitute.eq_1, Assignment.compose_term]
+  · rw [Assignment.compose_term, Term.substitute]
     simp only [List.map_subtype, List.unattach_attach, Term.eval,
       List.mem_map, forall_exists_index, and_imp,
       forall_apply_eq_imp_iff₂, List.map_map]
     have hargsarequal :
-        List.map (Assignment.compose I β σ) args = .map (Term.eval I β ∘ .substitute σ) args := by
+        List.map (Assignment.compose_term I β σ) args =
+          List.map (Term.eval I β ∘ Term.substitute σ) args := by
       simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
     rw [hargsarequal]
 
-/- ### Lemma 3.3.7 -/
---(hfree : ∀ x ∈ xs, x ∈ F.freeVars)
-lemma three_three_seven [DecidableEq X] (n : ℕ)
-    (F : Formula sig X) (xs : List X) (huniq : xs.Nodup) (hn : xs.length = n) :
-    @Valid _ _ univ _ (Formula.bigForall _ _ xs F) ↔ @Valid  _ _ univ _ F := by
+theorem three_three_five [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (C : Clause _ _) :
+    Formula.eval I β (C.substitute σ) = Formula.eval I (Assignment.compose I β σ) C := by
+  simp_all only [Clause.substitute, eq_iff_iff]
   apply Iff.intro
-  · intro hvalid I γ
-    specialize hvalid I
+  · intro heval
+    induction' C with lit lits ih
+    · simp_all only [List.map_nil, Clause.toFormula, Formula.eval]
+    · match lit with
+      | .pos a =>
+        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
+        rcases heval with ha | hrest
+        · left
+          induction' a with p args
+          rw [Formula.eval, Atom.substitute, Atom.eval, List.map_map] at *
+          have hargsarequal :
+              List.map (Term.eval I β ∘ Term.substitute σ) args =
+                List.map (Term.eval I (Assignment.compose I β σ)) args := by
+            simp_all only [List.map_inj_left, Function.comp_apply]
+            intro arg hargs
+            rw [substitution_lemma]
+          rw [← hargsarequal]
+          exact ha
+        · right
+          exact ih hrest
+      | .neg a =>
+        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
+        rcases heval with ha | hrest
+        · left
+          induction' a with p args
+          rw [Formula.eval, Atom.substitute] at *
+          simp_all only [Formula.eval, Atom.eval, List.map_map]
+          apply Aesop.BuiltinRules.not_intro
+          intro f
+          have hargsarequal :
+              List.map (Term.eval I β ∘ Term.substitute σ) args =
+                List.map (Term.eval I (Assignment.compose I β σ)) args := by
+            simp_all only [List.map_inj_left, Function.comp_apply]
+            intro arg hargs
+            rw [substitution_lemma]
+          simp_all only [not_true_eq_false]
+        · right
+          exact ih hrest
+  · intro heval
+    induction' C with lit lits ih
+    · simp_all only [List.map_nil, Clause.toFormula, Formula.eval]
+    · match lit with
+      | .pos a =>
+        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
+        rcases heval with ha | hrest
+        · left
+          induction' a with p args
+          rw [Formula.eval, Atom.substitute, Atom.eval, List.map_map] at *
+          have hargsarequal :
+              List.map (Term.eval I β ∘ Term.substitute σ) args =
+                List.map (Term.eval I (Assignment.compose I β σ)) args := by
+            simp_all only [List.map_inj_left, Function.comp_apply]
+            intro arg hargs
+            rw [substitution_lemma]
+          rw [hargsarequal]
+          exact ha
+        · right
+          exact ih hrest
+      | .neg a =>
+        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
+        rcases heval with ha | hrest
+        · left
+          induction' a with p args
+          rw [Formula.eval, Atom.substitute] at *
+          simp_all only [Formula.eval, Atom.eval, List.map_map]
+          apply Aesop.BuiltinRules.not_intro
+          intro f
+          have hargsarequal :
+              List.map (Term.eval I β ∘ Term.substitute σ) args =
+                List.map (Term.eval I (Assignment.compose I β σ)) args := by
+            simp_all only [List.map_inj_left, Function.comp_apply]
+            intro arg hargs
+            rw [substitution_lemma]
+          simp_all only [not_true_eq_false]
+        · right
+          exact ih hrest
+
+-- corollary
+theorem three_three_six [DecidableEq X]
+    (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (C : Clause _ _) :
+    EntailsInterpret I β (C.substitute σ) ↔ EntailsInterpret I (Assignment.compose I β σ) C := by
+  rw [EntailsInterpret, EntailsInterpret, ← eq_iff_iff]
+  exact three_three_five I β σ C
+
+/- ### Lemma 3.3.7 -/
+lemma three_three_seven [DecidableEq X] (n : ℕ) (F : Formula sig X) (I : Interpretation sig univ)
+    (xs : List X) (huniq : xs.Nodup) (hn : xs.length = n) :
+    ValidIn (F.bigForall _ _ xs) I ↔ ValidIn F I := by
+  apply Iff.intro
+  · intro hvalid γ
     have hlemma (as : List univ) (hlen : xs.length = as.length) :
         Formula.eval I (Assignment.bigModify γ xs as) F := by
-      induction' n with n ih generalizing γ xs as
-      · have h : xs = [] := by exact List.length_eq_zero.mp hn
-        have h2 : as = [] := by rw [h] at hlen; exact List.length_eq_zero.mp (id (Eq.symm hlen))
-        rw [h, h2]
-        subst h2 h
-        simp_all only [List.nodup_nil, List.length_nil, Assignment,
-          Formula.bigForall, Assignment.bigModify]
+      induction' n with n ih generalizing γ xs as F
+      · aesop
       · match xs, as with
         | x :: xs, a :: as =>
           rw [Assignment.bigModify]
           have hstillvalid :
               ∀ (β : Assignment X univ), Formula.eval I β (Formula.bigForall _ _ xs F) := by
             intro β
-            rw [Formula.bigForall] at hvalid
+            rw [Formula.bigForall, ValidIn] at hvalid
             specialize hvalid β
-            rw [Formula.eval] at hvalid
+            rw [EntailsInterpret, Formula.eval] at hvalid
             specialize hvalid (β x)
             rw [Assignment.modify_rfl] at hvalid
             exact hvalid
-          specialize ih xs (List.Nodup.of_cons huniq) (by exact Nat.succ_inj'.mp hn)
-            (γ.modify x a) hstillvalid as (Nat.succ_inj'.mp hlen)
-          exact ih
+          simp_all only [ValidIn, Assignment, EntailsInterpret, List.nodup_cons, List.length_cons,
+            Nat.add_right_cancel_iff, Formula.bigForall, Formula.eval, implies_true]
         | [], [] =>
-          simp_all only [List.nodup_nil, Assignment, Formula.bigForall, List.length_nil,
-            Assignment.bigModify, implies_true, Nat.add_one_ne_zero]
+          simp_all only [ValidIn, Assignment, EntailsInterpret, List.nodup_nil, List.length_nil,
+            Nat.self_eq_add_left, Nat.add_one_ne_zero]
     set as : List univ := List.map γ xs with has
     have hsubequal : γ = Assignment.bigModify γ xs as := by
       exact Assignment.substitute_equality γ xs
     rw [hsubequal]
     apply hlemma as (Eq.symm (List.length_map xs γ))
-  · intro hvalid I β
-    specialize hvalid I
+  · intro hvalid β
     induction' xs with x xs ih generalizing β n
-    · simp_all only [Valid, Assignment, List.nodup_nil, Formula.bigForall]
-    · rw [Formula.bigForall]
-      rw [Formula.eval]
+    · simp_all only [ValidIn, Valid, Assignment, List.nodup_nil, Formula.bigForall]
+    · rw [EntailsInterpret, Formula.bigForall, Formula.eval]
       intro a
-      specialize ih (n - 1) (List.Nodup.of_cons huniq) (Nat.eq_sub_of_add_eq hn) (β.modify x a)
-      exact ih
+      exact ih (n - 1) (List.Nodup.of_cons huniq) (Nat.eq_sub_of_add_eq hn) (β.modify x a)
+
+lemma valid_sub_of_valid {I : Interpretation sig univ} [DecidableEq X] (C : Clause sig X)
+    (σ : Substitution sig X) :
+    ValidIn (Clause.toFormula sig X C) I →
+      ValidIn (Clause.toFormula sig X (Clause.substitute σ C)) I := by
+  intro hvalid γ
+  specialize hvalid (Assignment.compose I γ σ)
+  rw [EntailsInterpret] at *
+  rw [three_three_five]
+  exact hvalid
 
 /- ### Lemma 3.3.8 -/
-lemma three_three_eight {sig : Signature} {X : Variables} [DecidableEq X] (n m : ℕ)
-    (C : Clause sig X) (xs : List X) (hxuniq : xs.Nodup) (hn : xs.length = n)
-    (σ : Substitution sig X) (ys : List X) (hyuniq : ys.Nodup) (hm : ys.length = m) :
-    @Valid _ _ univ _ (Formula.bigForall _ _ xs C.toFormula) →
-      @Valid _ _ univ _ (Formula.bigForall _ _ ys (C.substitute σ).toFormula) := by
+lemma three_three_eight {sig : Signature} {X : Variables} [DecidableEq X] (C : Clause sig X)
+    (I : Interpretation sig univ) (σ : Substitution sig X) (n m : ℕ)
+    (xs ys : List X) (hxuniq : xs.Nodup) (hn : xs.length = n)
+    (hyuniq : ys.Nodup) (hm : ys.length = m) :
+    ValidIn (Formula.bigForall _ _ xs C.toFormula) I →
+      ValidIn (Formula.bigForall _ _ ys (C.substitute σ).toFormula) I := by
   intro h
-  have := (three_three_seven n C.toFormula xs hxuniq hn).mp h
-  apply (three_three_seven m (C.substitute σ).toFormula ys hyuniq hm).mpr
-  sorry -- use 3.3.5 (see lecture notes)
+  have hl := (three_three_seven n C.toFormula I xs hxuniq hn).mp h
+  apply (three_three_seven m (C.substitute σ).toFormula I ys hyuniq hm).mpr
+  exact valid_sub_of_valid C σ hl
