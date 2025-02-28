@@ -53,9 +53,7 @@ mutual
     | x :: xs, y :: ys => eqTerm x y && eqArgs xs ys
 end
 
-instance [instX : BEq X] [instF : BEq sig.funs] :
-    BEq (Term sig X) :=
-  ⟨eqTerm sig X⟩
+instance [instX : BEq X] [instF : BEq sig.funs] : BEq (Term sig X) := ⟨eqTerm sig X⟩
 
 @[simp]
 def Term.freeVars : Term sig X -> Set X
