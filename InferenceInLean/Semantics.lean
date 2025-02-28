@@ -77,15 +77,9 @@ def Formula.eval {sig : Signature} {X : Variables} {univ : Universes} [Decidable
   | Formula.all x f => ∀ a : univ, Formula.eval I (β.modify x a) f
   | Formula.ex x f => ∃ a : univ, Formula.eval I (β.modify x a) f
 
-lemma Formula.eval_of_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
-    (∀ (β γ : Assignment X univ), Formula.eval I β F = Formula.eval I γ F) := by
-  intro β γ
-  sorry
-
 @[simp]
-def Term.eval_without_free {sig : Signature} {X : Variables} [DecidableEq X] (t : Term sig X) :
-    t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by
+lemma Term.eval_without_free_not_term {sig : Signature} {X : Variables} [DecidableEq X]
+    (t : Term sig X) : t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by
   intro a
   simp_all only [not_exists]
   intro x
@@ -94,7 +88,131 @@ def Term.eval_without_free {sig : Signature} {X : Variables} [DecidableEq X] (t 
   subst a_1
   simp_all only [Term.freeVars.eq_1, Set.singleton_ne_empty]
 
+lemma Set.singleton_of_union_empty {α : Type} {x : α} {A B : Set α}
+    (h : ¬A = {x}) (hsingleton : A ∪ B = {x}) : A = ∅ := by
+  have sub : A ⊆ {x} := by
+    rw [← hsingleton]
+    exact Set.subset_union_left
+  have : A = ∅ ∨ A = {x} := by
+    exact Set.subset_singleton_iff_eq.mp sub
+  simp_all only [Set.subset_singleton_iff, or_false]
 
+@[simp]
+lemma Term.subterms_closed {sig : Signature} {X : Variables} {_I : Interpretation sig univ}
+    [DecidableEq X] (t : Term sig X) (x : X) :
+    ∀ (f : sig.funs) (args : List (Term sig X)), t = Term.func f args →
+    t.freeVars = {} →
+    ∀ (arg : Term sig X) (harg : arg ∈ args), arg.freeVars = {} := by
+  intro f args ht hclosed arg harg
+  subst ht
+  induction' args with arg' args' ih generalizing arg
+  · simp_all only [List.not_mem_nil]
+  · aesop
+
+@[simp]
+lemma Term.one_freeVar_of_subterms {univ : Universes} {sig : Signature} {X : Variables}
+    (I : Interpretation sig univ) [DecidableEq X] {t : Term sig X} {x : X} :
+    ∀ (f : sig.funs) (args : List (Term sig X)), t = Term.func f args →
+    t.freeVars = {x} →
+    ∀ (arg : Term sig X) (_harg : arg ∈ args), arg.freeVars = {x} ∨ arg.freeVars = {} := by
+  intro f args ht honefree arg harg
+  induction' args with arg' args' ih generalizing arg t
+  · simp_all only [Term.freeVars.eq_2, Term.func.injEq, or_self, List.not_mem_nil]
+  · simp_all only [Term.freeVars.eq_3, Term.func.injEq, List.cons_ne_self, and_false,
+    IsEmpty.forall_iff, implies_true, List.mem_cons]
+    by_cases h : Term.freeVars sig X arg = {x}
+    · left
+      exact h
+    · rcases harg with h₁ | h₂
+      · subst h₁
+        subst ht
+        simp_all only [false_or]
+        clear ih
+        generalize Term.freeVars sig X arg = A, Term.freeVars sig X (Term.func f args') = B at *
+        exact Set.singleton_of_union_empty h honefree
+      · subst ht
+        simp_all only [false_or]
+        specialize @ih (Term.func f args') rfl
+        by_cases h' : Term.freeVars sig X (Term.func f args') = {x}
+        · specialize ih h' arg h₂
+          simp_all only [Set.union_singleton, false_or]
+        · simp_all only [IsEmpty.forall_iff]
+          generalize hA : Term.freeVars sig X (Term.func f args') = A,
+            hB : Term.freeVars sig X arg' = B at *
+          have hempty : A = {} := by
+            rw [Set.union_comm] at honefree
+            exact Set.singleton_of_union_empty h' honefree
+          clear honefree
+          induction' args' with arg' args ih
+          · simp_all only [List.not_mem_nil]
+          · aesop
+
+@[simp]
+lemma Assignment.eval_closed_term {sig : Signature} {X : Variables} {I : Interpretation sig univ}
+    [DecidableEq X] (t : Term sig X)
+    (x : X) : t.freeVars = {} → ∀ (β γ : Assignment X univ) (a : univ),
+      Term.eval I β t = Term.eval I γ t := by
+  intro hclosed β γ a
+  induction' t using Term.induction with y args ih f generalizing β γ a
+  · simp_all only [Term.freeVars.eq_1, Set.singleton_ne_empty]
+  · simp_all only [Assignment, Term.eval, List.map_subtype, List.unattach_attach]
+    have hargsareequal : List.map (Term.eval I β) args =
+        List.map (Term.eval I γ) args := by
+      simp_all only [List.map_inj_left]
+      intro arg harg
+      have s := @Term.subterms_closed univ sig X I _ (Term.func f args) x f args rfl hclosed arg harg
+      specialize ih arg harg s β γ a
+      rw [ih]
+    rw [← hargsareequal]
+
+#check Term.subterms_closed
+
+@[simp]
+lemma Assignment.eval_term_with_one_free {univ : Universes} {sig : Signature} {X : Variables}
+    {I : Interpretation sig univ} [DecidableEq X] {t : Term sig X}
+    {x : X} : t.freeVars = {x} → ∀ (β γ : Assignment X univ) (a : univ),
+      Term.eval I (β.modify x a) t = Term.eval I (γ.modify x a) t := by
+  intro honefree β γ a
+  induction' t using Term.induction with y args ih f
+  · simp_all only [Term.freeVars.eq_1, Set.singleton_eq_singleton_iff, Term.eval, modify,
+      ↓reduceIte]
+  · simp_all only [Term.eval, List.map_subtype, List.unattach_attach]
+    have hargsareequal :
+        List.map (Term.eval I (β.modify x a)) args = List.map (Term.eval I (γ.modify x a)) args := by
+      simp_all only [List.map_inj_left]
+      intro arg harg
+      have honeornone := Term.one_freeVar_of_subterms I f args rfl honefree arg harg
+      rcases honeornone with hone | hnone
+      · aesop
+      · apply Assignment.eval_closed_term
+        · exact x
+        · simp_all only
+        · exact a
+    rw [hargsareequal]
+
+/- @[simp]
+def Term.eval_without_free {sig : Signature} {X : Variables} [DecidableEq X] (t : Term sig X) :
+    t.freeVars = {} → ∀ (f : sig.funs) (args : List (Term sig X)),
+      t = Term.func f args → args = [] := by
+  intro hclosed f args heq
+  by_contra harg
+  induction' t using Term.induction with x args ih f generalizing args
+  · sorry
+  ·
+    simp_all only [imp_false, not_not, Term.func.injEq]
+    obtain ⟨left, right⟩ := heq
+    subst left right
+    apply harg
+    have hex : ∃ (t : Term sig X), t ∈ args := List.exists_mem_of_ne_nil args harg
+    rcases hex with ⟨arg, harg⟩
+    specialize ih (Term.func f args)
+    have h : ∀ term ∈ args,
+      Term.freeVars sig X term = ∅ → ∀ (args : List (Term sig X)), term = Term.func f args := sorry
+    specialize ih h -/
+
+#check Formula.freeVars
+#check Set.mem_diff_singleton
+#check Term.freeVars
 -- β[x1 ↦ a1, ..., xn ↦ an]
 @[simp]
 def Assignment.bigModify {X : Variables} {univ : Universes} [DecidableEq X]
@@ -103,6 +221,29 @@ def Assignment.bigModify {X : Variables} {univ : Universes} [DecidableEq X]
   match xs, as with
   | x :: xs, a :: as => Assignment.bigModify (β.modify x a) xs as
   | _, _ => β
+
+def Assignment.bigModify_modify {X : Variables} {univ : Universes} [DecidableEq X]
+    (β : Assignment X univ) (xs : List X) (as : List univ) (y : X) (b : univ) (hxuniq : xs.Nodup)
+    (hxnotinxs : y ∉ xs) (n : ℕ) (hn : n = xs.length) (hlen : xs.length = as.length) :
+    (β.bigModify xs as).modify y b = (β.modify y b).bigModify xs as := by
+  induction' n with n ih generalizing xs as β
+  · have hxsempty : xs = [] := by exact List.length_eq_zero.mp (id (Eq.symm hn))
+    have hasempty : as = [] := by subst hxsempty; exact List.length_eq_zero.mp (id (Eq.symm hlen))
+    subst hxsempty hasempty
+    simp_all only [List.nodup_nil, List.not_mem_nil, not_false_eq_true, List.length_nil, Assignment,
+      bigModify]
+  · match xs, as with
+    | x :: xs, a :: as =>
+      rw [bigModify, bigModify]
+      specialize ih (β.modify x a) xs as (List.Nodup.of_cons hxuniq)
+        (List.not_mem_of_not_mem_cons hxnotinxs)
+        (by simp_all only [Assignment, List.nodup_cons, List.mem_cons, not_or, List.length_cons,
+          Nat.add_right_cancel_iff])
+        (by exact Nat.succ_inj'.mp hlen)
+      rw [ih, modify_comm x y a b (Ne.symm (List.ne_of_not_mem_cons hxnotinxs))]
+    | [], [] =>
+      simp_all only [List.nodup_nil, List.not_mem_nil, not_false_eq_true, List.length_nil,
+        bigModify, implies_true, Nat.add_one_ne_zero]
 
 -- β[] = β
 @[simp]
@@ -320,3 +461,98 @@ lemma Assignment.modFn_eq_id {X : Variables} {univ : Universes} [DecidableEq X]
   · have hasnone : as[i]? = none := getElem?_neg as i hin
     have hxsnone : xs[i]? = none := by simp_all only [not_lt, getElem?_eq_none]
     rw [hasnone, hxsnone, Option.map]
+
+
+lemma Formula.eval_of_many_free {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (I : Interpretation sig univ) (F : Formula sig X) (xs : List X) (as : List univ)
+    (hxuniq : xs.Nodup) (hlen : xs.length = as.length) (hfree : F.freeVars = xs.toFinset) :
+    (∀ (β γ : Assignment X univ),
+      Formula.eval I (β.bigModify xs as) F = Formula.eval I (γ.bigModify xs as) F) := by
+  intro β γ
+  induction' F with _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ x F ih y f ih generalizing β γ xs as
+  · simp_all only [Formula.freeVars, eval]
+  · simp_all only [Formula.freeVars, eval]
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · simp_all only [Assignment, eq_iff_iff, Formula.freeVars, eval]
+    apply Iff.intro
+    · intro heval a
+      specialize heval a
+      by_cases hxinxs : x ∈ xs
+      · by_contra hcontra
+        clear heval hcontra ih
+        have hxinxs₂ : x ∈ {a | a ∈ xs} := by simp_all only [List.coe_toFinset, Set.mem_setOf_eq]
+        clear hxinxs
+        rw [List.coe_toFinset] at hfree
+        generalize {a | a ∈ xs} = A, F.freeVars = B at *
+        subst hfree
+        simp_all only [Set.mem_diff, Set.mem_singleton_iff, not_true_eq_false, and_false]
+      · by_cases hfin : F.freeVars = ↑xs.toFinset ∪ {x}
+        · have hfreexxs : F.freeVars = ↑(x :: xs).toFinset := by
+            simp_all only [List.coe_toFinset, Set.union_singleton, Set.mem_singleton_iff,
+              Set.insert_diff_of_mem, Set.mem_setOf_eq, not_false_eq_true,
+              Set.diff_singleton_eq_self, List.toFinset_cons, Finset.coe_insert]
+          specialize ih (x :: xs) (a :: as) (List.Nodup.cons hxinxs hxuniq)
+            (Nat.succ_inj'.mpr hlen) hfreexxs β γ
+          rw [Assignment.bigModify, Assignment.bigModify] at ih
+          rw [Assignment.bigModify_modify γ xs as x a hxuniq hxinxs xs.length rfl hlen]
+          apply ih.mp
+          rw [← Assignment.bigModify_modify β xs as x a hxuniq hxinxs xs.length rfl hlen]
+          exact heval
+        · have hfreexs : F.freeVars = ↑xs.toFinset := by
+            clear ih heval hlen hxuniq
+            rw [List.coe_toFinset] at *
+            have hxnotinxs : x ∉ {a | a ∈ xs} := by
+              simp_all only [Set.union_singleton, Set.mem_setOf_eq, not_false_eq_true]
+            clear hxinxs
+            generalize {a | a ∈ xs} = A, F.freeVars = B at *
+            aesop
+          specialize ih xs as hxuniq hlen hfreexs (β.modify x a) (γ.modify x a)
+          rw [Assignment.bigModify_modify γ xs as x a hxuniq hxinxs xs.length rfl hlen]
+          apply ih.mp
+          rw [← Assignment.bigModify_modify β xs as x a hxuniq hxinxs xs.length rfl hlen]
+          exact heval
+    · sorry -- completely analogous
+  · sorry
+
+lemma Formula.eval_of_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
+    (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
+    (∀ (β γ : Assignment X univ), Formula.eval I β F = Formula.eval I γ F) := by
+  intro β γ
+  induction' F with _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ x F ih x f ih generalizing β γ
+  · simp_all only [Formula.closed, Formula.freeVars, eval]
+  · simp_all only [Formula.closed, Formula.freeVars, eval]
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+  ·
+    simp_all only [Formula.closed, eq_iff_iff, Formula.freeVars, eval]
+    by_cases h : F.freeVars = ∅
+    · simp_all only [Assignment, forall_const, Set.mem_empty_iff_false, not_false_eq_true, Set.diff_singleton_eq_self]
+      apply Iff.intro
+      · intro hmod a
+        specialize ih (β.modify x a) (γ.modify x a)
+        simp_all only [true_iff]
+      · intro hmod a
+        specialize ih (β.modify x a) (γ.modify x a)
+        simp_all only [iff_true]
+    apply Iff.intro
+    · intro hmod a
+      simp_all only [Assignment, IsEmpty.forall_iff]
+      have honefree : F.freeVars = {x} := by
+        generalize F.freeVars = A at *
+        ext y
+        sorry
+      clear hclosed h
+      sorry
+    · intro hmod a
+      simp_all only [Assignment, IsEmpty.forall_iff]
+      sorry
+  · sorry

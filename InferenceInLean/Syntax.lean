@@ -102,7 +102,7 @@ inductive Formula where
   | ex (x : X) (f : Formula)
 
 @[simp]
-def Formula.freeVars {sig : Signature} {X : Variables} : @Formula sig X -> Set X
+def Formula.freeVars {sig : Signature} {X : Variables} : Formula sig X -> Set X
   | Formula.falsum => ∅
   | Formula.verum => ∅
   | Formula.atom a => Atom.freeVars a
