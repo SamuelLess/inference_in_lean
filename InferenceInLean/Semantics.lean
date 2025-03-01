@@ -79,14 +79,7 @@ def Formula.eval {sig : Signature} {X : Variables} {univ : Universes} [Decidable
 
 @[simp]
 lemma Term.eval_without_free_not_term {sig : Signature} {X : Variables} [DecidableEq X]
-    (t : Term sig X) : t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by
-  intro a
-  simp_all only [not_exists]
-  intro x
-  apply Aesop.BuiltinRules.not_intro
-  intro a_1
-  subst a_1
-  simp_all only [Term.freeVars.eq_1, Set.singleton_ne_empty]
+    (t : Term sig X) : t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by aesop
 
 lemma Set.singleton_of_union_empty {α : Type} {x : α} {A B : Set α}
     (h : ¬A = {x}) (hsingleton : A ∪ B = {x}) : A = ∅ := by

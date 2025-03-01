@@ -117,6 +117,7 @@ def Formula.freeVars {sig : Signature} {X : Variables} : Formula sig X -> Set X
 @[simp]
 def Formula.closed {sig : Signature} {X : Variables} (F : Formula sig X) : Prop :=
   Formula.freeVars F = ∅
+
 /--
  Creates formula ∀ x_1 ... x_n, F.
 -/
@@ -130,14 +131,45 @@ def Formula.bigForall [DecidableEq X]
 @[simp]
 def Clause.toFormula : Clause sig X -> Formula sig X
   | [] => Formula.falsum
-  | .pos l :: ls => Formula.or (Formula.atom l) (Clause.toFormula ls)
-  | .neg l :: ls => Formula.or (Formula.neg (Formula.atom l)) (Clause.toFormula ls)
+  | .pos l :: ls => (Formula.atom l).or (Clause.toFormula ls)
+  | .neg l :: ls => Formula.or (Formula.atom l).neg (Clause.toFormula ls)
 
 instance : Coe (Clause sig X) (Formula sig X) :=
   ⟨Clause.toFormula sig X⟩
 
 instance : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
   ⟨fun N => {↑C | C ∈ N}⟩
+
+def Term.freeVarsList : Term sig X -> List X
+  | Term.var x => [x]
+  | Term.func _ [] => []
+  | Term.func f (a :: args) => (Term.freeVarsList a).append (Term.freeVarsList (Term.func f args))
+
+def Atom.freeVarsList [DecidableEq X] : Atom sig X -> List X
+  | .pred _ [] => []
+  | .pred P (t :: ts) => List.dedup ((t.freeVarsList).append (Atom.pred P ts).freeVarsList)
+
+def Clause.freeVarsList [DecidableEq X] : Clause sig X -> List X
+  | [] => []
+  | (.pos l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
+  | (.neg l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
+
+@[simp]
+def Clause.toClosedFormula [DecidableEq X] (C : Clause sig X) : Formula sig X :=
+  Formula.bigForall sig X (C.freeVarsList) C
+
+theorem Clause.closedClause_closed [DecidableEq X] (C : Clause sig X) :
+    Formula.closed C.toClosedFormula := by
+  unfold toClosedFormula
+  unfold Formula.closed
+  unfold Formula.freeVars
+  sorry
+
+theorem nodup_clauseFreeVarsList [DecidableEq X] (C : Clause sig X) :
+    List.Nodup (C.freeVarsList) := by
+  unfold Clause.freeVarsList
+  simp_all only [Clause]
+  split <;> simp_all only [List.nodup_nil, List.nodup_dedup]
 
 @[simp]
 def Substitution := X -> Term sig X

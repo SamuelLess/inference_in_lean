@@ -176,7 +176,7 @@ lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : Decida
     (∃ (β : Assignment X univ), EntailsInterpret I β F) → ValidIn F I := by
   intro hβ β
   rcases hβ with ⟨γ, hγ⟩
-  have heval := Formula.eval_of_closed _ I F hclosed β γ
+  have heval := Formula.eval_of_closed I F hclosed β γ
   rw [EntailsInterpret, heval, ← EntailsInterpret]
   exact hγ
 
