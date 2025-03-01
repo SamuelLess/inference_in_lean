@@ -92,19 +92,6 @@ theorem groundResolution_soundness {A : Atom sig Empty} {C D : Clause sig Empty}
 
 /- ### 3.10 General Resolution -/
 
--- TODO: do we need to add that freeVars ∩ freeVars = ∅?
-@[simp]
-def GeneralResolutionRule [inst : DecidableEq X] (A B : Atom sig X) (C D : Clause sig X)
-    (σ : Substitution sig X) :
-    Inference sig X :=
-  ⟨{.neg A :: C, .pos B :: D}, (C ++ D).substitute σ, MostGeneralUnifier [(A, B)] σ⟩
-
-@[simp]
-def GeneralFactorizationRule [inst : DecidableEq X] (A B : Atom sig X) (C : Clause sig X)
-    (σ : Substitution sig X) :
-    Inference sig X :=
-  ⟨{.pos A :: .pos B :: C}, Clause.substitute σ (.pos A :: C), MostGeneralUnifier [(A, B)] σ⟩
-
 lemma validclosed_of_valid [DecidableEq X] {C: Clause sig X} {I : Interpretation sig univ} :
     ValidIn C.toFormula I → ValidIn C.toClosedFormula I := by
   intro heval
@@ -114,6 +101,7 @@ lemma validclosed_of_valid [DecidableEq X] {C: Clause sig X} {I : Interpretation
   have := (@three_three_seven sig X univ _ n C I xs hxsnodup rfl).mpr
   exact fun β => this heval β
 
+/- Direct formalization of Proposition 3.10.14 -/
 theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Clause sig X)
     (σ : Substitution sig X) (hmgu : MostGeneralUnifier [(A, B)] σ) :
     @Entails _ _ univ _
@@ -144,7 +132,8 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
 
   let leftys : List X := (leftinner.substitute σ).freeVarsList
   let leftm : ℕ := leftys.length
-  have hleftysnodup : leftys.Nodup := by exact nodup_clauseFreeVarsList sig X (Clause.substitute σ leftinner)
+  have hleftysnodup : leftys.Nodup := by
+    exact nodup_clauseFreeVarsList sig X (Clause.substitute σ leftinner)
 
   have hleft338 := @three_three_eight univ sig X _
     leftinner I σ leftn leftm leftxs leftys hleftxsnodup rfl hleftysnodup rfl hleftvalid
@@ -164,14 +153,14 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
 
   -- use 3.3.7
   have hleftinnersub : @ValidIn _ X _ _ (leftinner.substitute σ) I := by
-    exact (three_three_seven leftys.length (Clause.toFormula sig X (Clause.substitute σ leftinner)) I
-            leftys hleftysnodup rfl).mp
-        hleft338
+    exact (three_three_seven leftys.length
+      (Clause.toFormula sig X (Clause.substitute σ leftinner)) I leftys hleftysnodup rfl).mp
+      hleft338
 
   have hrightinnersub : @ValidIn _ X _ _ (rightinner.substitute σ) I := by
-    exact (three_three_seven rightys.length (Clause.toFormula sig X (Clause.substitute σ rightinner)) I
-            rightys hrightysnodup rfl).mp
-        hright338
+    exact (three_three_seven rightys.length
+      (Clause.toFormula sig X (Clause.substitute σ rightinner)) I rightys hrightysnodup rfl).mp
+      hright338
 
   have hDσ_of_negBσ : ∀ β : Assignment X univ, ¬Atom.eval I β (B.substitute σ) →
       Formula.eval I β (D.substitute σ) := by
@@ -228,38 +217,3 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
       aesop
 
   exact validclosed_of_valid hCDσ β
-
-theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C D : Clause sig X}
-    {σ : Substitution sig X} :
-    @Soundness _ _ univ _ ([GeneralResolutionRule A B C D σ, GeneralFactorizationRule A B C σ]):= by
-  rw [Soundness]
-  intro rule h_rule_general hcond I
-
-  intro β h_premise_true
-  simp_all only [GeneralResolutionRule, Clause, List.append_eq, GeneralFactorizationRule]
-  rw [List.mem_cons, List.mem_singleton] at h_rule_general
-  cases h_rule_general
-  -- proof of resolution rule
-  next h_res_rule =>
-    subst h_res_rule
-    simp only [GeneralResolutionRule] at h_premise_true
-    simp_all only [Clause, GeneralResolutionRule, List.append_eq, Substitution.eq_1,
-      MostGeneralUnifier, Unifier, Equality.eq_1, EqualityProblem.eq_1, List.mem_singleton,
-      forall_eq, MoreGeneral, Set.mem_insert_iff, Set.mem_singleton_iff,
-      EntailsInterpret, forall_eq_or_imp]
-    rcases hcond with ⟨hunif, hmgu⟩
-    repeat rw [← EntailsInterpret] at h_premise_true
-    clear hmgu
-    rw [eval_append_iff_eval_or_subst, Formula.eval]
-    obtain ⟨first, second⟩ := h_premise_true
-    have hclosed : Formula.closed (Clause.toFormula sig X (Literal.neg A :: C)) := sorry
-    have hclosed₂ : Formula.closed (Clause.toFormula sig X (Literal.pos B :: D)) := sorry
-    have s := validIn_of_entails_closed I _ hclosed (by use β)
-    have t := validIn_of_entails_closed I _ hclosed₂ (by use β)
-    apply valid_sub_of_valid _ σ at s
-    apply valid_sub_of_valid _ σ at t
-    specialize s β
-    specialize t β
-    aesop
-  next h_fact_rule =>
-    sorry

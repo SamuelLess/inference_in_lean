@@ -159,8 +159,6 @@ lemma Assignment.eval_closed_term {sig : Signature} {X : Variables} {I : Interpr
       rw [ih]
     rw [← hargsareequal]
 
-#check Term.subterms_closed
-
 @[simp]
 lemma Assignment.eval_term_with_one_free {univ : Universes} {sig : Signature} {X : Variables}
     {I : Interpretation sig univ} [DecidableEq X] {t : Term sig X}
@@ -183,27 +181,6 @@ lemma Assignment.eval_term_with_one_free {univ : Universes} {sig : Signature} {X
         · simp_all only
         · exact a
     rw [hargsareequal]
-
-/- @[simp]
-def Term.eval_without_free {sig : Signature} {X : Variables} [DecidableEq X] (t : Term sig X) :
-    t.freeVars = {} → ∀ (f : sig.funs) (args : List (Term sig X)),
-      t = Term.func f args → args = [] := by
-  intro hclosed f args heq
-  by_contra harg
-  induction' t using Term.induction with x args ih f generalizing args
-  · sorry
-  ·
-    simp_all only [imp_false, not_not, Term.func.injEq]
-    obtain ⟨left, right⟩ := heq
-    subst left right
-    apply harg
-    have hex : ∃ (t : Term sig X), t ∈ args := List.exists_mem_of_ne_nil args harg
-    rcases hex with ⟨arg, harg⟩
-    specialize ih (Term.func f args)
-    have h : ∀ term ∈ args,
-      Term.freeVars sig X term = ∅ → ∀ (args : List (Term sig X)), term = Term.func f args := sorry
-    specialize ih h -/
-
 
 lemma List.reduce_to_empty {α β: Type} {xs : List α} {as : List β}
     (hlen : xs.length = as.length) (hzero : as.length = 0 ∨ xs.length = 0) : xs = [] ∧ as = [] := by
@@ -285,19 +262,6 @@ lemma Assignment.bigModify_add_nondup {X : Variables} {univ : Universes} [Decida
     (β : Assignment X univ) (xs : List X) (as : List univ) (x : X) (a : univ) :
     ((β.bigModify xs as).modify x a) x = a := by
   simp_all only [modify, ↓reduceIte]
-
-#check List.drop
-/- lemma Assignment.bigModify_nodup_erase {X : Variables} {univ : Universes} [DecidableEq X]
-    (β : Assignment X univ) (xs : List X) (_huniq : xs.Nodup) (as : List univ)
-    (_hlen : xs.length = as.length) (x : X) (a : univ) (_hx : x ∈ xs)
-    (i : ℕ) (hiinbounds : i < xs.length) (hi : xs[i] = x) (ha : as[i] = a) :
-    ∀ (y : X), β.bigModify (xs.eraseIdx i) (as.eraseIdx i) y = if x == y then β x -/
-#check List.Nodup.erase
-/- lemma Assignment.bigModify_add_nondup {X : Variables} {univ : Universes} [DecidableEq X]
-    (β : Assignment X univ) (xs : List X) (_huniq : xs.Nodup) (as : List univ)
-    (_hlen : xs.length = as.length) (x : X) (a : univ) (_hx : x ∈ xs) :
-    (i : ℕ) (hi : xs[i] = x) (a' : univ) (ha : as[i] = a')
-    (bigModify (xs.dropIdx i) (as.dropIdx i)).modify x a = β := by sorry -/
 
 -- y ∉ [x1, ..., xn] → β[x1 ↦ a1, ..., xn ↦ an] y = β y
 @[simp]
@@ -566,7 +530,6 @@ lemma Atom.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
     exact heval
   rw [hargsareequal]
 
-#check Term.freeVars
 lemma Formula.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables}
     [inst : DecidableEq X] (I : Interpretation sig univ) (F : Formula sig X) (xs : List X)
     (as : List univ) (hlen : xs.length = as.length)

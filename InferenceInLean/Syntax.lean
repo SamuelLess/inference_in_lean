@@ -61,6 +61,21 @@ def Term.freeVars : Term sig X -> Set X
   | .func _ [] => ∅
   | .func f (a :: args) => Term.freeVars a ∪ Term.freeVars (Term.func f args)
 
+lemma Term.arg_subset_of_freeVars {sig : Signature} {X : Variables}
+    [_inst : DecidableEq X] (args : List (Term sig X)) (f : sig.funs) :
+    ∀ (arg : Term sig X) (_harg : arg ∈ args),
+    Term.freeVars sig X arg ⊆ Term.freeVars sig X (Term.func f args) := by
+  intro arg harg
+  induction' args with arg' args ih
+  · simp_all only [List.not_mem_nil]
+  · simp only [List.mem_cons] at harg
+    rcases harg with harg | harg
+    · subst harg
+      simp_all only [Term.freeVars.eq_3, Set.subset_union_left]
+    · specialize ih harg
+      rw [Term.freeVars]
+      exact Set.subset_union_of_subset_right ih (Term.freeVars sig X arg')
+
 inductive Atom where
   | pred (p : sig.preds) (args : List (Term sig X))
 
@@ -145,7 +160,8 @@ instance : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
 def Term.freeVarsList [DecidableEq X] : Term sig X -> List X
   | Term.var x => [x]
   | Term.func _ [] => []
-  | Term.func f (a :: args) => List.dedup ((Term.freeVarsList a).append (Term.freeVarsList (Term.func f args)))
+  | Term.func f (a :: args) => List.dedup
+    ((Term.freeVarsList a).append (Term.freeVarsList (Term.func f args)))
 
 @[simp]
 lemma Term.freeVars_sub_freeVarsList [DecidableEq X] (t : Term sig X) :
@@ -181,17 +197,16 @@ def Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
     | nil => aesop
     | cons head tail ih =>
       simp only [freeVars, Set.union_subset_iff]
-      constructor
+      unfold freeVarsList
+      constructor <;> intro x hxinfree
       · have hfree_subset := Term.freeVars_sub_freeVarsList sig X head
-        unfold freeVarsList
-        intro x hxinfree
-        simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append, Set.mem_setOf_eq]
+        simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append,
+          Set.mem_setOf_eq]
         apply Or.inl
         apply hfree_subset
         simp_all only
-      · unfold freeVarsList
-        intro x hxinfree
-        simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append, Set.mem_setOf_eq]
+      · simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append,
+          Set.mem_setOf_eq]
         apply Or.inr
         apply ih
         exact hxinfree
@@ -399,24 +414,3 @@ theorem idempotent_iff_inter_empty {sig : Signature} {X : Variables} [BEq X] [BE
       rw [Substitution.compose]
       refine Substitution.id_of_free_not_in_domain σ (σ x) ?_
       aesop
-
-/-
-Maybe continue with?
-3.3 LEMMA If a is an idempotent substitution and z is an arbitrary substitution, then a is
-more general than z iff za = z.
--/
-
-lemma Term.arg_subset_of_freeVars {sig : Signature} {X : Variables}
-    [_inst : DecidableEq X] (args : List (Term sig X)) (f : sig.funs) :
-    ∀ (arg : Term sig X) (_harg : arg ∈ args),
-    Term.freeVars sig X arg ⊆ Term.freeVars sig X (Term.func f args) := by
-  intro arg harg
-  induction' args with arg' args ih
-  · simp_all only [List.not_mem_nil]
-  · simp only [List.mem_cons] at harg
-    rcases harg with harg | harg
-    · subst harg
-      simp_all only [Term.freeVars.eq_3, Set.subset_union_left]
-    · specialize ih harg
-      rw [Term.freeVars]
-      exact Set.subset_union_of_subset_right ih (Term.freeVars sig X arg')
