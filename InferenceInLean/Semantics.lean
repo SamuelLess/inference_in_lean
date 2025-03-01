@@ -170,7 +170,8 @@ lemma Assignment.eval_term_with_one_free {univ : Universes} {sig : Signature} {X
       ↓reduceIte]
   · simp_all only [Term.eval, List.map_subtype, List.unattach_attach]
     have hargsareequal :
-        List.map (Term.eval I (β.modify x a)) args = List.map (Term.eval I (γ.modify x a)) args := by
+        List.map (Term.eval I (β.modify x a)) args =
+          List.map (Term.eval I (γ.modify x a)) args := by
       simp_all only [List.map_inj_left]
       intro arg harg
       have honeornone := Term.one_freeVar_of_subterms I f args rfl honefree arg harg

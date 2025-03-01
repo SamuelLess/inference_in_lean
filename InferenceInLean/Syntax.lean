@@ -145,6 +145,47 @@ def Formula.bigForall [DecidableEq X]
   | x :: xs => .all x (F.bigForall xs)
 
 @[simp]
+lemma Formula.bigForall_freeVars_subset [DecidableEq X] (xs : List X) (F : Formula sig X) :
+    (F.bigForall sig X xs).freeVars ⊆ F.freeVars := by
+  induction' xs with x xs ih
+  · simp_all only [bigForall, subset_refl]
+  · simp_all only [bigForall, freeVars, Set.diff_singleton_subset_iff]
+    intro x' hx'
+    simp_all only [Set.mem_insert_iff]
+    apply Or.inr
+    apply ih
+    simp_all only
+
+lemma Formula.bigForall_all [DecidableEq X] (xs : List X) (F : Formula sig X) (x : X) :
+    (bigForall sig X xs (all x F)).freeVars = (all x (bigForall sig X xs F)).freeVars := by
+  simp_all only [freeVars]
+  induction' xs with y xs ih
+  · simp_all only [List.not_mem_nil, or_false, Set.setOf_eq_eq_singleton,
+      Set.subset_singleton_iff, bigForall, freeVars]
+  · simp_all only [List.mem_cons, bigForall, freeVars]
+    ext x_1 : 1
+    simp_all only [Set.mem_diff, Set.mem_singleton_iff]
+    apply Iff.intro
+    · intro a
+      simp_all only [not_false_eq_true, and_self]
+    · intro a
+      simp_all only [not_false_eq_true, and_self]
+
+@[simp]
+lemma Formula.bigForall_subset_freeVars [DecidableEq X] (xs : List X) (F : Formula sig X) :
+    F.freeVars ⊆ xs.toFinset → (F.bigForall sig X xs).closed := by
+  intro hmem
+  simp_all only [List.coe_toFinset, closed]
+  induction' xs with x xs ih generalizing F
+  · simp_all only [List.not_mem_nil, Set.setOf_false, Set.subset_empty_iff, bigForall]
+  · rw [bigForall, freeVars]
+    simp_all only [List.mem_cons, bigForall, freeVars]
+    specialize ih (.all x F)
+      (by simp_all only [freeVars, Set.diff_singleton_subset_iff]; exact hmem)
+    have hsymm := bigForall_all sig X xs F x
+    simp_all only [freeVars]
+
+@[simp]
 def Clause.toFormula : Clause sig X -> Formula sig X
   | [] => Formula.falsum
   | .pos l :: ls => (Formula.atom l).or (Clause.toFormula ls)
@@ -184,6 +225,42 @@ lemma Term.freeVars_sub_freeVarsList [DecidableEq X] (t : Term sig X) :
         intro x hxinfree
         aesop
 
+@[simp]
+lemma Term.freeVarsList_sub_freeVars [DecidableEq X] (t : Term sig X) :
+    ↑(t.freeVarsList).toFinset ⊆ t.freeVars := by
+  induction' t using Term.induction with x args ih f
+  · simp_all only [freeVarsList, List.toFinset_cons, List.toFinset_nil, insert_emptyc_eq,
+      Finset.coe_singleton, freeVars, subset_refl]
+  · induction' args with arg args ih' generalizing f
+    · simp_all only [List.not_mem_nil, List.coe_toFinset, IsEmpty.forall_iff, implies_true,
+        freeVarsList, List.toFinset_nil, Finset.coe_empty, freeVars, subset_refl]
+    · simp_all only [List.coe_toFinset, List.mem_cons, forall_eq_or_imp, freeVarsList,
+        List.append_eq, List.mem_dedup,
+      List.mem_append, freeVars, implies_true, forall_const]
+      obtain ⟨ihleft, ihright⟩ := ih
+      intro x hx
+      simp_all only [Set.mem_setOf_eq, Set.mem_union]
+      cases hx with
+      | inl h =>
+        apply Or.inl
+        apply ihleft
+        simp_all only [Set.mem_setOf_eq]
+      | inr h_1 =>
+        right
+        clear ihleft
+        induction' args with arg' args' ih'
+        · simp_all only [List.not_mem_nil, IsEmpty.forall_iff, implies_true, freeVarsList]
+        · simp_all only [List.mem_cons, or_true, implies_true, forall_const, forall_eq_or_imp,
+            freeVarsList, List.append_eq, List.mem_dedup, List.mem_append, freeVars, Set.mem_union]
+          obtain ⟨left, right⟩ := ihright
+          cases h_1 with
+          | inl h =>
+            apply Or.inl
+            apply left
+            simp_all only [Set.mem_setOf_eq]
+          | inr h_2 => simp_all only [forall_const, or_true]
+
+@[simp]
 def Atom.freeVarsList [DecidableEq X] : Atom sig X -> List X
   | .pred _ [] => []
   | .pred P (t :: ts) => List.dedup ((t.freeVarsList).append (Atom.pred P ts).freeVarsList)
@@ -211,10 +288,109 @@ def Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
         apply ih
         exact hxinfree
 
+def Atom.freeVarsList_sub_freeVars[DecidableEq X] (a : Atom sig X) :
+    ↑(a.freeVarsList).toFinset ⊆ a.freeVars := by
+  induction' a with p args
+  intro x hmem
+  simp_all only [List.coe_toFinset, Set.mem_setOf_eq]
+  induction' args with arg args ih
+  · simp_all only [freeVarsList, List.not_mem_nil]
+  · simp_all only [freeVarsList, List.append_eq, List.mem_dedup, List.mem_append, freeVars,
+      Set.mem_union]
+    cases hmem with
+    | inl h =>
+      left
+      have l := Term.freeVarsList_sub_freeVars sig X arg
+      simp_all only [List.coe_toFinset]
+      apply l
+      simp_all only [Set.mem_setOf_eq]
+    | inr h_1 => simp_all only [forall_const, or_true]
+
+@[simp]
 def Clause.freeVarsList [DecidableEq X] : Clause sig X -> List X
   | [] => []
   | (.pos l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
   | (.neg l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
+
+def Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
+    (C.toFormula).freeVars ⊆ ↑(C.freeVarsList).toFinset := by
+  induction' C with lit lits ih
+  · simp_all only [freeVarsList, List.toFinset_nil, Finset.coe_empty, toFormula, Formula.freeVars,
+      subset_refl]
+  · simp_all only [List.coe_toFinset]
+    match lit with
+    | .pos a =>
+      simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
+      intro x
+      intro a_1
+      simp_all only [Set.mem_setOf_eq, Set.mem_union]
+      cases a_1 with
+      | inl h =>
+        left
+        have hfree := Atom.freeVars_sub_freeVarsList sig X a
+        simp_all only [List.coe_toFinset]
+        apply hfree
+        simp_all only [Set.mem_setOf_eq]
+      | inr h_1 =>
+        apply Or.inr
+        apply ih
+        simp_all only [Set.mem_setOf_eq]
+    | .neg a =>
+      simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
+      intro x
+      intro a_1
+      simp_all only [Set.mem_setOf_eq, Set.mem_union]
+      cases a_1 with
+      | inl h =>
+        left
+        have hfree := Atom.freeVars_sub_freeVarsList sig X a
+        simp_all only [List.coe_toFinset]
+        apply hfree
+        simp_all only [Set.mem_setOf_eq]
+      | inr h_1 =>
+        apply Or.inr
+        apply ih
+        simp_all only [Set.mem_setOf_eq]
+
+def Clause.freeVarsList_sub_freeVars [DecidableEq X] (C : Clause sig X) :
+    ↑(C.freeVarsList).toFinset ⊆ (C.toFormula).freeVars := by
+  induction' C with lit lits ih
+  · simp_all only [freeVarsList, List.toFinset_nil, Finset.coe_empty, toFormula, Formula.freeVars,
+      subset_refl]
+  · simp_all only [List.coe_toFinset]
+    match lit with
+    | .pos a =>
+      simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
+      intro x
+      intro a_1
+      simp_all only [Set.mem_setOf_eq, Set.mem_union]
+      cases a_1 with
+      | inl h =>
+        left
+        have hfree := Atom.freeVarsList_sub_freeVars sig X a
+        simp_all only [List.coe_toFinset]
+        apply hfree
+        simp_all only [Set.mem_setOf_eq]
+      | inr h_1 =>
+        apply Or.inr
+        apply ih
+        simp_all only [Set.mem_setOf_eq]
+    | .neg a =>
+      simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
+      intro x
+      intro a_1
+      simp_all only [Set.mem_setOf_eq, Set.mem_union]
+      cases a_1 with
+      | inl h =>
+        left
+        have hfree := Atom.freeVarsList_sub_freeVars sig X a
+        simp_all only [List.coe_toFinset]
+        apply hfree
+        simp_all only [Set.mem_setOf_eq]
+      | inr h_1 =>
+        apply Or.inr
+        apply ih
+        simp_all only [Set.mem_setOf_eq]
 
 @[simp]
 lemma nodup_clauseFreeVarsList [DecidableEq X] (C : Clause sig X) :
@@ -233,7 +409,56 @@ lemma Clause.closedEmpty_closed [DecidableEq X] :
 lemma Clause.consClosed [DecidableEq X] (L : Literal sig X) (C : Clause sig X) :
     (Clause.toClosedFormula sig X C).closed → (Clause.toClosedFormula sig X (L :: C)).closed := by
   intro h
-  sorry
+  simp_all only [toClosedFormula]
+  match L with
+  | .pos a =>
+    simp_all only [freeVarsList, List.append_nil, toFormula]
+    have f := Formula.bigForall_subset_freeVars sig X
+      (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
+      ((Formula.atom a).or (toFormula sig X C))
+    apply f
+    simp_all only [Formula.closed, List.coe_toFinset, List.mem_dedup, List.mem_append,
+      Formula.freeVars]
+    intro x
+    intro a_1
+    simp_all only [Set.mem_setOf_eq, Set.mem_union]
+    cases a_1 with
+    | inl h_1 =>
+      left
+      have s := Atom.freeVars_sub_freeVarsList sig X a
+      simp_all only [List.coe_toFinset]
+      apply s
+      simp_all only [Set.mem_setOf_eq]
+    | inr h_2 =>
+      have s := Clause.freeVars_sub_freeVarsList sig X C
+      simp_all only [List.coe_toFinset]
+      apply Or.inr
+      apply s
+      simp_all only [Set.mem_setOf_eq]
+  | .neg a =>
+    simp_all only [freeVarsList, List.append_nil, toFormula]
+    have f := Formula.bigForall_subset_freeVars sig X
+      (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
+      ((Formula.atom a).neg.or (toFormula sig X C))
+    simp_all only [Formula.closed, List.coe_toFinset, List.mem_dedup, List.mem_append,
+      Formula.freeVars]
+    apply f
+    intro x
+    intro a_1
+    simp_all only [Set.mem_setOf_eq, Set.mem_union]
+    cases a_1 with
+    | inl h_1 =>
+      left
+      have s := Atom.freeVars_sub_freeVarsList sig X a
+      simp_all only [List.coe_toFinset]
+      apply s
+      simp_all only [Set.mem_setOf_eq]
+    | inr h_2 =>
+      have s := Clause.freeVars_sub_freeVarsList sig X C
+      simp_all only [List.coe_toFinset]
+      apply Or.inr
+      apply s
+      simp_all only [Set.mem_setOf_eq]
 
 theorem Clause.closedClause_closed [DecidableEq X] (C : Clause sig X) :
     Formula.closed C.toClosedFormula := by
