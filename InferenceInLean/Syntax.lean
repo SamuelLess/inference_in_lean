@@ -66,7 +66,8 @@ inductive Atom where
 
 @[simp]
 def Atom.freeVars {sig : Signature} {X : Variables} : Atom sig X -> Set X
-  | .pred _ args => args.foldl (fun acc t => acc ∪ Term.freeVars sig X t) ∅
+  | .pred _ [] => ∅
+  | .pred P (a :: args) => a.freeVars  ∪ (Atom.pred P args).freeVars
 
 inductive Literal where
   | pos (a : Atom sig X)
@@ -316,3 +317,18 @@ Maybe continue with?
 3.3 LEMMA If a is an idempotent substitution and z is an arbitrary substitution, then a is
 more general than z iff za = z.
 -/
+
+lemma Term.arg_subset_of_freeVars {sig : Signature} {X : Variables}
+    [_inst : DecidableEq X] (args : List (Term sig X)) (f : sig.funs) :
+    ∀ (arg : Term sig X) (_harg : arg ∈ args),
+    Term.freeVars sig X arg ⊆ Term.freeVars sig X (Term.func f args) := by
+  intro arg harg
+  induction' args with arg' args ih
+  · simp_all only [List.not_mem_nil]
+  · simp only [List.mem_cons] at harg
+    rcases harg with harg | harg
+    · subst harg
+      simp_all only [Term.freeVars.eq_3, Set.subset_union_left]
+    · specialize ih harg
+      rw [Term.freeVars]
+      exact Set.subset_union_of_subset_right ih (Term.freeVars sig X arg')

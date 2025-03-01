@@ -520,21 +520,6 @@ lemma Assignment.modFn_eq_id {X : Variables} {univ : Universes} [DecidableEq X]
     have hxsnone : xs[i]? = none := by simp_all only [not_lt, getElem?_eq_none]
     rw [hasnone, hxsnone, Option.map]
 
-lemma Term.arg_subset_of_freeVars {sig : Signature} {X : Variables}
-    [_inst : DecidableEq X] (args : List (Term sig X)) (f : sig.funs) :
-    ∀ (arg : Term sig X) (_harg : arg ∈ args),
-    Term.freeVars sig X arg ⊆ Term.freeVars sig X (Term.func f args) := by
-  intro arg harg
-  induction' args with arg' args ih
-  · simp_all only [List.not_mem_nil]
-  · simp only [List.mem_cons] at harg
-    rcases harg with harg | harg
-    · subst harg
-      simp_all only [Term.freeVars.eq_3, Set.subset_union_left]
-    · specialize ih harg
-      rw [Term.freeVars]
-      exact Set.subset_union_of_subset_right ih (Term.freeVars sig X arg')
-
 lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables}
     [inst : DecidableEq X] (I : Interpretation sig univ) (T : Term sig X) (xs : List X)
     (as : List univ) (hxuniq : xs.Nodup) (hlen : xs.length = as.length) (n : ℕ) (hn : n = xs.length)
@@ -544,8 +529,7 @@ lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
   induction' T using Term.induction with y args ih f
   · simp_all only [Term.freeVars.eq_1, Set.singleton_subset_iff, Set.mem_setOf_eq, eval]
     induction' n with n ih generalizing xs as
-    · intro β γ
-      obtain ⟨hxsempty, hasempty⟩ := List.reduce_to_empty hlen (by simp_all only [or_self])
+    · obtain ⟨hxsempty, hasempty⟩ := List.reduce_to_empty hlen (by simp_all only [or_self])
       subst hasempty hxsempty
       simp_all only [List.length_nil, List.nodup_nil, List.not_mem_nil]
     · match xs, as with
@@ -563,49 +547,50 @@ lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
         | inr h_1 =>
           apply ih <;> simp_all only
       | [], [] => simp_all only [Assignment, List.nodup_nil, List.length_nil, Nat.add_one_ne_zero]
-  · simp_all only [Assignment, eval, List.map_subtype, List.unattach_attach]
-    induction' n with n ih' generalizing xs as
-    · intro β γ
-      obtain ⟨hxsempty, hasempty⟩ := List.reduce_to_empty hlen (by simp_all only [or_self])
-      subst hxsempty hasempty
-      rw [Assignment.bigModify, Assignment.bigModify] at *
-      have hempty : Term.freeVars sig X (Term.func f args) = {} := by
-        simp_all only [List.nodup_nil, List.not_mem_nil, Set.setOf_false, Set.subset_empty_iff,
-          List.length_nil, Assignment.bigModify]
-      simp_all only [List.nodup_nil, List.not_mem_nil, Set.setOf_false, subset_refl,
-        List.length_nil, Set.subset_empty_iff, Assignment.bigModify]
-      have hargsareequal : List.map (eval I β) args = List.map (eval I γ) args := by
-        simp_all only [List.map_inj_left]
-        intro arg harg
-        have hempty : Term.freeVars sig X arg = ∅ := by
-          have hsub := Term.arg_subset_of_freeVars args f arg harg
-          exact Set.subset_eq_empty hsub hempty
-        specialize ih arg harg hempty β γ
-        exact ih
-      rw [hargsareequal]
-      simp only [List.nil_eq, reduceCtorEq, imp_self, implies_true]
-      simp only [List.nil_eq, reduceCtorEq, imp_self, implies_true]
-    · intro β γ
-      match xs, as with
-      | x :: xs, a :: as =>
-        clear ih'
-        rw [Assignment.bigModify, Assignment.bigModify]
-        have hargsareequal :
-          List.map (eval I ((Assignment.modify β x a).bigModify xs as)) args =
-            List.map (eval I ((Assignment.modify γ x a).bigModify xs as)) args := by
-          simp_all only [List.nodup_cons, List.length_cons, Nat.add_right_cancel_iff, List.mem_cons,
-            Assignment.bigModify, List.map_inj_left]
-          intro arg harg
-          subst hn
-          obtain ⟨hxnonmen, hxuniq⟩ := hxuniq
-          -- Term.arg_subset_of_freeVars
-          have hsubset : Term.freeVars sig X arg ⊆ {a | a = x ∨ a ∈ xs} := by
-            have hsub := Term.arg_subset_of_freeVars args f arg harg
-            exact fun ⦃a⦄ a_1 ↦ hfree (hsub a_1)
-          specialize ih arg harg hsubset β γ
-          exact ih
-        rw [hargsareequal]
-      | [], [] => simp_all only [List.nodup_nil, List.length_nil, Nat.add_one_ne_zero]
+  · intro β γ
+    subst hn
+    simp_all only [Assignment, eval, List.map_subtype, List.unattach_attach]
+    have hargsareequal : List.map (eval I (β.bigModify xs as)) args =
+        List.map (eval I (γ.bigModify xs as)) args := by
+      simp_all only [List.map_inj_left]
+      intro arg harg
+      have hsubset : Term.freeVars sig X arg ⊆ {a | a ∈ xs} := by
+        have hsub := Term.arg_subset_of_freeVars args f arg harg
+        exact fun ⦃a⦄ a_1 ↦ hfree (hsub a_1)
+      specialize ih arg harg hsubset β γ
+      exact ih
+    rw [hargsareequal]
+
+lemma Atom.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables}
+    [inst : DecidableEq X] (I : Interpretation sig univ) (A : Atom sig X) (xs : List X)
+    (as : List univ) (hxuniq : xs.Nodup) (hlen : xs.length = as.length) (n : ℕ)
+    (_hn : n = xs.length) (hfree : A.freeVars ⊆ xs.toFinset) : (∀ (β γ : Assignment X univ),
+      Atom.eval I (β.bigModify xs as) A = Atom.eval I (γ.bigModify xs as) A) := by
+  induction' A with P args
+  intro β γ
+  simp_all only [Atom.freeVars, List.coe_toFinset, eval, eq_iff_iff]
+  have hargsareequal : List.map (Term.eval I (β.bigModify xs as)) args =
+      List.map (Term.eval I (γ.bigModify xs as)) args := by
+    simp_all only [List.map_inj_left]
+    intro arg harg
+    have hsubset : Term.freeVars sig X arg ⊆ ↑xs.toFinset := by
+      simp_all only [List.coe_toFinset]
+      have hsub : Term.freeVars sig X arg ⊆ (Atom.pred P args).freeVars := by
+        induction' args with arg' args ih
+        · simp_all only [Atom.freeVars, Set.empty_subset, List.not_mem_nil]
+        · simp_all only [Atom.freeVars, Set.union_subset_iff, List.mem_cons, forall_const]
+          obtain ⟨left, right⟩ := hfree
+          cases harg with
+          | inl h =>
+            subst h
+            simp_all only [Set.subset_union_left]
+          | inr h_1 =>
+            simp_all only [forall_const]
+            exact Set.subset_union_of_subset_right ih (Term.freeVars sig X arg')
+      exact fun ⦃a⦄ a_1 ↦ hfree (hsub a_1)
+    have heval := Term.eval_of_many_free I arg xs as hxuniq hlen xs.length rfl hsubset β γ
+    exact heval
+  rw [hargsareequal]
 
 #check Term.freeVars
 lemma Formula.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables}
@@ -618,12 +603,9 @@ lemma Formula.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variab
   · simp_all only [Formula.freeVars, eval]
   · simp_all only [Formula.freeVars, eval]
   · induction' a with p args
-    simp_all only [Formula.freeVars, Atom.freeVars, List.coe_toFinset, eval, Atom.eval, eq_iff_iff]
-    apply Iff.intro
-    · intro a
-      sorry
-    · intro a
-      sorry
+    have hatom := Atom.eval_of_many_free I (Atom.pred p args) xs as hxuniq hlen xs.length rfl
+      (by simp_all only [Formula.freeVars, Atom.freeVars, List.coe_toFinset]) β γ
+    simp_all only [Formula.freeVars, Atom.freeVars, List.coe_toFinset, Atom.eval, eq_iff_iff, eval]
   · rw [eval, eval]
     specialize ih xs as hxuniq hlen hfree β γ
     exact congrArg Not ih
