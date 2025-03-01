@@ -67,7 +67,7 @@ inductive Atom where
 @[simp]
 def Atom.freeVars {sig : Signature} {X : Variables} : Atom sig X -> Set X
   | .pred _ [] => ∅
-  | .pred P (a :: args) => a.freeVars  ∪ (Atom.pred P args).freeVars
+  | .pred P (a :: args) => a.freeVars ∪ (Atom.pred P args).freeVars
 
 inductive Literal where
   | pos (a : Atom sig X)
@@ -118,6 +118,7 @@ def Formula.freeVars {sig : Signature} {X : Variables} : Formula sig X -> Set X
 @[simp]
 def Formula.closed {sig : Signature} {X : Variables} (F : Formula sig X) : Prop :=
   Formula.freeVars F = ∅
+
 /--
  Creates formula ∀ x_1 ... x_n, F.
 -/
@@ -131,14 +132,101 @@ def Formula.bigForall [DecidableEq X]
 @[simp]
 def Clause.toFormula : Clause sig X -> Formula sig X
   | [] => Formula.falsum
-  | .pos l :: ls => Formula.or (Formula.atom l) (Clause.toFormula ls)
-  | .neg l :: ls => Formula.or (Formula.neg (Formula.atom l)) (Clause.toFormula ls)
+  | .pos l :: ls => (Formula.atom l).or (Clause.toFormula ls)
+  | .neg l :: ls => Formula.or (Formula.atom l).neg (Clause.toFormula ls)
 
 instance : Coe (Clause sig X) (Formula sig X) :=
   ⟨Clause.toFormula sig X⟩
 
 instance : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
   ⟨fun N => {↑C | C ∈ N}⟩
+
+@[simp]
+def Term.freeVarsList [DecidableEq X] : Term sig X -> List X
+  | Term.var x => [x]
+  | Term.func _ [] => []
+  | Term.func f (a :: args) => List.dedup ((Term.freeVarsList a).append (Term.freeVarsList (Term.func f args)))
+
+@[simp]
+lemma Term.freeVars_sub_freeVarsList [DecidableEq X] (t : Term sig X) :
+    t.freeVars ⊆ (t.freeVarsList).toFinset := by
+  induction' t using Term.induction with x args ih f
+  · aesop
+  · induction args with
+    | nil => aesop
+    | cons head tail ih' =>
+      simp
+      constructor
+      · specialize ih head (by simp)
+        generalize freeVarsList sig X head = Fl at *
+        generalize freeVars sig X head = Fs at *
+        intro x hxinFs
+        simp only [Set.mem_setOf_eq]
+        left
+        exact List.mem_dedup.mp (ih hxinFs)
+      · simp_all only [List.coe_toFinset]
+        intro x hxinfree
+        aesop
+
+def Atom.freeVarsList [DecidableEq X] : Atom sig X -> List X
+  | .pred _ [] => []
+  | .pred P (t :: ts) => List.dedup ((t.freeVarsList).append (Atom.pred P ts).freeVarsList)
+
+def Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
+    a.freeVars ⊆ (a.freeVarsList).toFinset := by
+  simp_all only [List.coe_toFinset]
+  induction a with
+  | pred p args =>
+    induction args with
+    | nil => aesop
+    | cons head tail ih =>
+      simp only [freeVars, Set.union_subset_iff]
+      constructor
+      · have hfree_subset := Term.freeVars_sub_freeVarsList sig X head
+        unfold freeVarsList
+        intro x hxinfree
+        simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append, Set.mem_setOf_eq]
+        apply Or.inl
+        apply hfree_subset
+        simp_all only
+      · unfold freeVarsList
+        intro x hxinfree
+        simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append, Set.mem_setOf_eq]
+        apply Or.inr
+        apply ih
+        exact hxinfree
+
+def Clause.freeVarsList [DecidableEq X] : Clause sig X -> List X
+  | [] => []
+  | (.pos l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
+  | (.neg l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
+
+@[simp]
+lemma nodup_clauseFreeVarsList [DecidableEq X] (C : Clause sig X) :
+    List.Nodup (C.freeVarsList) := by
+  unfold Clause.freeVarsList
+  simp_all only [Clause]
+  split <;> simp_all only [List.nodup_nil, List.nodup_dedup]
+
+@[simp]
+def Clause.toClosedFormula [DecidableEq X] (C : Clause sig X) : Formula sig X :=
+  Formula.bigForall sig X (C.freeVarsList) C
+
+lemma Clause.closedEmpty_closed [DecidableEq X] :
+    Formula.closed (Clause.toClosedFormula sig X []) := by aesop
+
+lemma Clause.consClosed [DecidableEq X] (L : Literal sig X) (C : Clause sig X) :
+    (Clause.toClosedFormula sig X C).closed → (Clause.toClosedFormula sig X (L :: C)).closed := by
+  intro h
+  sorry
+
+theorem Clause.closedClause_closed [DecidableEq X] (C : Clause sig X) :
+    Formula.closed C.toClosedFormula := by
+  induction C with
+  | nil => aesop
+  | cons head tail ih =>
+    simp_all
+    exact Clause.consClosed sig X head tail ih
 
 @[simp]
 def Substitution := X -> Term sig X
