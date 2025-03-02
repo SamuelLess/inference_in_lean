@@ -223,80 +223,26 @@ theorem three_three_five [DecidableEq X]
     Formula.eval I β (C.substitute σ) = Formula.eval I (Assignment.compose I β σ) C := by
   simp_all only [Clause.substitute, eq_iff_iff]
   apply Iff.intro
+  all_goals
   · intro heval
     induction' C with lit lits ih
     · simp_all only [List.map_nil, Clause.toFormula, Formula.eval]
-    · match lit with
-      | .pos a =>
-        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
-        rcases heval with ha | hrest
-        · left
-          induction' a with p args
-          rw [Formula.eval, Atom.substitute, Atom.eval, List.map_map] at *
-          have hargsarequal :
-              List.map (Term.eval I β ∘ Term.substitute σ) args =
-                List.map (Term.eval I (Assignment.compose I β σ)) args := by
-            simp_all only [List.map_inj_left, Function.comp_apply]
-            intro arg hargs
-            rw [substitution_lemma]
-          rw [← hargsarequal]
-          exact ha
-        · right
-          exact ih hrest
-      | .neg a =>
+    · induction' lit with a a
+      all_goals
         rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
         rcases heval with ha | hrest
         · left
           induction' a with p args
           rw [Formula.eval, Atom.substitute] at *
           simp_all only [Formula.eval, Atom.eval, List.map_map]
-          apply Aesop.BuiltinRules.not_intro
-          intro f
           have hargsarequal :
               List.map (Term.eval I β ∘ Term.substitute σ) args =
                 List.map (Term.eval I (Assignment.compose I β σ)) args := by
             simp_all only [List.map_inj_left, Function.comp_apply]
             intro arg hargs
             rw [substitution_lemma]
-          simp_all only [not_true_eq_false]
-        · right
-          exact ih hrest
-  · intro heval
-    induction' C with lit lits ih
-    · simp_all only [List.map_nil, Clause.toFormula, Formula.eval]
-    · match lit with
-      | .pos a =>
-        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
-        rcases heval with ha | hrest
-        · left
-          induction' a with p args
-          rw [Formula.eval, Atom.substitute, Atom.eval, List.map_map] at *
-          have hargsarequal :
-              List.map (Term.eval I β ∘ Term.substitute σ) args =
-                List.map (Term.eval I (Assignment.compose I β σ)) args := by
-            simp_all only [List.map_inj_left, Function.comp_apply]
-            intro arg hargs
-            rw [substitution_lemma]
-          rw [hargsarequal]
+          simp only [hargsarequal] at *
           exact ha
-        · right
-          exact ih hrest
-      | .neg a =>
-        rw [List.map, Literal.substitute, Clause.toFormula, Formula.eval] at *
-        rcases heval with ha | hrest
-        · left
-          induction' a with p args
-          rw [Formula.eval, Atom.substitute] at *
-          simp_all only [Formula.eval, Atom.eval, List.map_map]
-          apply Aesop.BuiltinRules.not_intro
-          intro f
-          have hargsarequal :
-              List.map (Term.eval I β ∘ Term.substitute σ) args =
-                List.map (Term.eval I (Assignment.compose I β σ)) args := by
-            simp_all only [List.map_inj_left, Function.comp_apply]
-            intro arg hargs
-            rw [substitution_lemma]
-          simp_all only [not_true_eq_false]
         · right
           exact ih hrest
 

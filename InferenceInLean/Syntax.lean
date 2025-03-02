@@ -412,55 +412,24 @@ lemma Clause.consClosed [DecidableEq X] (L : Literal sig X) (C : Clause sig X) :
     (Clause.toClosedFormula sig X C).closed → (Clause.toClosedFormula sig X (L :: C)).closed := by
   intro h
   simp_all only [toClosedFormula]
-  match L with
-  | .pos a =>
-    simp_all only [freeVarsList, List.append_nil, toFormula]
-    have f := Formula.bigForall_subset_freeVars sig X
-      (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
-      ((Formula.atom a).or (toFormula sig X C))
-    apply f
-    simp_all only [Formula.closed, List.coe_toFinset, List.mem_dedup, List.mem_append,
-      Formula.freeVars]
-    intro x
-    intro a_1
-    simp_all only [Set.mem_setOf_eq, Set.mem_union]
-    cases a_1 with
-    | inl h_1 =>
-      left
-      have s := Atom.freeVars_sub_freeVarsList sig X a
-      simp_all only [List.coe_toFinset]
-      apply s
-      simp_all only [Set.mem_setOf_eq]
-    | inr h_2 =>
-      have s := Clause.freeVars_sub_freeVarsList sig X C
-      simp_all only [List.coe_toFinset]
-      apply Or.inr
-      apply s
-      simp_all only [Set.mem_setOf_eq]
-  | .neg a =>
-    simp_all only [freeVarsList, List.append_nil, toFormula]
-    have f := Formula.bigForall_subset_freeVars sig X
-      (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
-      ((Formula.atom a).neg.or (toFormula sig X C))
-    simp_all only [Formula.closed, List.coe_toFinset, List.mem_dedup, List.mem_append,
-      Formula.freeVars]
-    apply f
-    intro x
-    intro a_1
-    simp_all only [Set.mem_setOf_eq, Set.mem_union]
-    cases a_1 with
-    | inl h_1 =>
-      left
-      have s := Atom.freeVars_sub_freeVarsList sig X a
-      simp_all only [List.coe_toFinset]
-      apply s
-      simp_all only [Set.mem_setOf_eq]
-    | inr h_2 =>
-      have s := Clause.freeVars_sub_freeVarsList sig X C
-      simp_all only [List.coe_toFinset]
-      apply Or.inr
-      apply s
-      simp_all only [Set.mem_setOf_eq]
+  induction' L with a a
+  simp_all only [freeVarsList, List.append_nil, toFormula]
+  have horsubset := Formula.bigForall_subset_freeVars sig X
+    (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
+    ((Formula.atom a).or (toFormula sig X C))
+  swap
+  simp_all only [freeVarsList, List.append_nil, toFormula]
+  have horsubset := Formula.bigForall_subset_freeVars sig X
+    (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
+    ((Formula.atom a).neg.or (toFormula sig X C))
+  all_goals
+  have hatomsubset := Atom.freeVars_sub_freeVarsList sig X a
+  have hclausesubset := Clause.freeVars_sub_freeVarsList sig X C
+  simp_all only [Formula.closed, List.coe_toFinset, List.mem_dedup, List.mem_append,
+    Formula.freeVars]
+  apply horsubset
+  intro x
+  aesop
 
 theorem Clause.closedClause_closed [DecidableEq X] (C : Clause sig X) :
     Formula.closed C.toClosedFormula := by
