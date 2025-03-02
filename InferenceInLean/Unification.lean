@@ -49,10 +49,6 @@ def MostGeneralUnifier {sig : Signature} {X : Variables} [DecidableEq X]
     (E : EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
   Unifier E σ ∧ (∀ τ : Substitution sig X, Unifier E τ → σ ≤ τ)
 
-/-
-TODO: Add example proof for a mgu.
--/
-
 lemma mgu_imp_unifier {sig : Signature} {X : Variables} [DecidableEq X] (E : EqualityProblem sig X)
     (σ : Substitution sig X) : MostGeneralUnifier E σ → Unifier E σ := fun ⟨h, _⟩ => h
 

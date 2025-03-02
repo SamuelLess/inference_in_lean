@@ -22,6 +22,8 @@ inductive Term where
   | var (x : X)
   | func (f : sig.funs) (args: List Term)
 
+abbrev GroundTerm (sig : Signature) := Term sig Empty
+
 lemma Term.induction {P : (Term sig X) → Prop}
     (base : ∀ x : X, P (var x)) (step : ∀ (args : List (Term sig X)),
       (ih : ∀ term ∈ args, P term) → ∀ (f : sig.funs), P (func f args)) :

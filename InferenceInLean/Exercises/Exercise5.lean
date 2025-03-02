@@ -1,4 +1,4 @@
-import InferenceInLean.Basic
+import InferenceInLean.Resolution
 import Mathlib.Data.Finset.Defs
 import Mathlib.Data.Set.Card
 import Mathlib.SetTheory.Cardinal.Finite
@@ -33,11 +33,11 @@ def f : List (Term sig5_1 String) -> Term sig5_1 String := .func .f
 def P : List (Term sig5_1 String) -> Formula sig5_1 String := fun args =>.atom <| .pred .P args
 
 /- Force the interpretation of P to be false for every list of arguments with the wrong arity. -/
-def ArityP : (preds -> List (Term sig5_1 Empty) -> Prop) -> Prop
-| ps => ∀ (args : List (Term sig5_1 Empty)), (args.length ≠ 1) → ¬(ps .P args)
+def ArityP (ps : preds -> List (GroundTerm sig5_1) -> Prop) : Prop :=
+  ∀ (args : List (GroundTerm sig5_1)), (args.length ≠ 1) → ¬(ps .P args)
 
 -- (1) There is a Σ-model A of P (b) ∧ ¬P (f (b)) such that UA = {7, 8, 9}.
-def F₁ : Formula sig5_1 String := .and (P [b]) (.neg (P [f [b]]))
+def F₁ : Formula sig5_1 String := (P [b]).and (.neg (P [f [b]]))
 theorem task5_1_1 : ∃ (I : Interpretation sig5_1 (Fin 3)), ∀ β : Assignment String (Fin 3),
     EntailsInterpret I β F₁ := by
   -- Define the interpretation I for universe {0, 1, 2} (representing {7, 8, 9})
@@ -58,7 +58,7 @@ theorem task5_1_1 : ∃ (I : Interpretation sig5_1 (Fin 3)), ∀ β : Assignment
   simp [F₁, EntailsInterpret, I, P, b, f]
 
 -- (2) There is no Σ-model A of P (b) ∧ ¬P (f (f (b))) such that fA (a) = a for every a ∈ UA.
-def F₂ : Formula sig5_1 String := .and (P [b]) (.neg (P [f [f [b]]]))
+def F₂ : Formula sig5_1 String := (P [b]).and (.neg (P [f [f [b]]]))
 theorem task5_1_2 : ¬∃ (univ : Universes) (I : Interpretation sig5_1 univ),
     ∀ β : Assignment String univ, EntailsInterpret I β F₂ ∧
     (∀ a, (I.functions .f) [a] = a):= by
@@ -85,7 +85,7 @@ theorem task5_1_2 : ¬∃ (univ : Universes) (I : Interpretation sig5_1 univ),
 theorem task5_1_3 : ∃ preds, ∀ β, EntailsInterpret (HerbrandInterpretation sig5_1 preds) β F₁ := by
   -- First, let's define our Herbrand interpretation
   -- We need to define how predicates behave on ground terms
-  let preds : sig5_1.preds → List (Term sig5_1 Empty) → Prop := fun p args =>
+  let preds : sig5_1.preds → List (GroundTerm sig5_1) → Prop := fun p args =>
     match p, args with
     | .P, [.func .b []] => True
     | .P, [.func .f [.func .b []]] => False
@@ -100,16 +100,16 @@ theorem task5_1_3 : ∃ preds, ∀ β, EntailsInterpret (HerbrandInterpretation 
 -- (4) P(b) ∧ ∀x ¬P(x) has no Herbrand model.
 def F₄ : Formula sig5_1 String := .and (P [b]) (.all "x" (.neg (P [.var "x"])))
 theorem task5_1_4 : ¬∃ preds, ∀ β, EntailsInterpret (HerbrandInterpretation sig5_1 preds) β F₄ := by
-  let b' : Term sig5_1 Empty := Term.func .b []
+  let b' : GroundTerm sig5_1 := Term.func .b []
   intro h
   rcases h with ⟨preds, h⟩
-  let β₀ : Assignment String (Term sig5_1 Empty) := fun _ => b'
+  let β₀ : Assignment String (GroundTerm sig5_1) := fun _ => b'
   have h₀ := h β₀
   have hPb : preds .P [b'] := by
     simp [F₄, P, b] at h₀
     exact h₀.1
   obtain ⟨_, h_forall⟩ := h₀
-  let β₁ : Assignment String (Term sig5_1 Empty) := β₀.modify "x" b'
+  let β₁ : Assignment String (GroundTerm sig5_1) := β₀.modify "x" b'
   have hNotPb : ¬preds .P [b'] := by
     simp [Formula.eval, HerbrandInterpretation, Atom.eval, Term.eval,
           Assignment.modify, Formula.all, β₁] at h_forall
@@ -120,13 +120,13 @@ theorem task5_1_4 : ¬∃ preds, ∀ β, EntailsInterpret (HerbrandInterpretatio
 
 -- (5) ∀x P (f (x)) does not have a Herbrand model with a two-element universe.
 def F₅ : Formula sig5_1 String := .all "x" (P [f [.var "x"]])
-theorem task5_1_5  (S : Set <| Term sig5_1 Empty) (hall : ∀ t : Term sig5_1 Empty, t ∈ S) :
+theorem task5_1_5  (S : Set <| GroundTerm sig5_1) (hall : ∀ t : GroundTerm sig5_1, t ∈ S) :
     Set.encard S ≠ 2 := by
-  let t₀ : Term sig5_1 Empty := .func .b []
-  let t₁ : Term sig5_1 Empty := .func .f [t₀]
-  let t₂ : Term sig5_1 Empty := .func .f [t₁]
-  let t₃ : Term sig5_1 Empty := .func .f [t₂]
-  let S' : Set (Term sig5_1 Empty) := {t₀, t₁, t₂}
+  let t₀ : GroundTerm sig5_1 := .func .b []
+  let t₁ : GroundTerm sig5_1 := .func .f [t₀]
+  let t₂ : GroundTerm sig5_1 := .func .f [t₁]
+  let t₃ : GroundTerm sig5_1 := .func .f [t₂]
+  let S' : Set (GroundTerm sig5_1) := {t₀, t₁, t₂}
   have ht₀ := hall t₀
   have ht₁ := hall t₁
   have ht₂ := hall t₂
@@ -158,10 +158,10 @@ theorem task5_1_6 : ∃! ps,
     ext p args
     cases p
     -- Let's prove that P must be true for all args for preds'
-    have h : ∀ (t : Term sig5_1 Empty), preds' .P [t] := by
+    have h : ∀ (t : GroundTerm sig5_1), preds' .P [t] := by
       intro t
       -- Create an assignment that maps x to t
-      let β : Assignment String (Term sig5_1 Empty) := fun v => Term.func .b []
+      let β : Assignment String (GroundTerm sig5_1) := fun v => Term.func .b []
       -- Use the entailment hypothesis
       have h_entails_β := h_entails β
       -- Extract the universal quantifier's meaning
