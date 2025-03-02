@@ -26,13 +26,13 @@ instance {sig : Signature} {X : Variables} : Membership (Equality sig X) (Equali
 
 @[simp]
 def EqualityProblem.freeVars {sig : Signature} {X : Variables} :
-    @EqualityProblem sig X -> Set X
+    EqualityProblem sig X -> Set X
   | [] => ∅
   | (lhs, rhs) :: eqs => Atom.freeVars lhs ∪ Atom.freeVars rhs ∪ freeVars eqs
 
 @[simp]
 def Unifier {sig : Signature} {X : Variables} [DecidableEq X]
-    (E : @EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
+    (E : EqualityProblem sig X) (σ : Substitution sig X) : Prop :=
   ∀ eq ∈ E, have ⟨lhs, rhs⟩ := eq; lhs.substitute σ = rhs.substitute σ
 
 def example_unification_problem : EqualityProblem (Signature.mk String String) String :=

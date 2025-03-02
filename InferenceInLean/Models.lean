@@ -82,8 +82,8 @@ def SetEntails [DecidableEq X]
 @[simp]
 def ClauseSetEntails [DecidableEq X]
     (N : Set <| Clause sig X) (C : Clause sig X) : Prop :=
-  ∀ (I : Interpretation sig univ) (β : Assignment X univ),
-    (∀ D ∈ N, EntailsInterpret I β D) → EntailsInterpret I β C
+  ∀ (I : Interpretation sig univ),
+    (∀ D ∈ N, @ValidIn _ X _ _ D I) → @ValidIn _ X _ _ C I
 
 lemma entails_setEntails [inst : DecidableEq X]
     (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @SetEntails _ X univ _ {F} G := by simp
