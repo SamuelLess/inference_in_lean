@@ -11,7 +11,9 @@ open Semantics
 open Models
 open Unification
 
-/- ### 3.7 Inference Systems and Proofs -/
+/-! ### 3.7 Inference Systems and Proofs
+In this section we define inferences and proofs, allowing us to define syntactic entailment and
+soundness. -/
 
 namespace Inferences
 

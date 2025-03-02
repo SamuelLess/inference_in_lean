@@ -7,7 +7,9 @@ set_option autoImplicit false
 open Syntax
 open Semantics
 
-/-! ## 3.3 Models, Validity, and Satisfiability -/
+/-! ## 3.3 Models, Validity, and Satisfiability
+In this section we establish various notions of semantic entailment and prove several lemmas that
+show how assignments and substitutions interact. -/
 
 namespace Models
 
@@ -50,6 +52,22 @@ theorem entails_iff_imp_valid [inst : DecidableEq X]
     (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @Valid _ _ univ _ (Formula.imp F G) :=
   Eq.to_iff rfl
 
+/- N ⊨ F -/
+@[simp]
+def SetEntails [DecidableEq X]
+    (N : Set (Formula sig X)) (F : Formula sig X) : Prop :=
+  ∀ (I : Interpretation sig univ) (β : Assignment X univ),
+    (∀ G ∈ N, EntailsInterpret I β G) → EntailsInterpret I β F
+
+@[simp]
+def ClauseSetEntails [DecidableEq X]
+    (N : Set <| Clause sig X) (C : Clause sig X) : Prop :=
+  ∀ (I : Interpretation sig univ),
+    (∀ D ∈ N, @ValidIn _ X _ _ D I) → @ValidIn _ X _ _ C I
+
+lemma entails_setEntails [inst : DecidableEq X]
+    (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @SetEntails _ X univ _ {F} G := by simp
+
 /- ### Satsfiability -/
 
 @[simp]
@@ -72,21 +90,6 @@ def Literal.satisfied_by [DecidableEq X]
   EntailsInterpret I β <| match L with
     | Literal.pos a => Formula.atom a
     | Literal.neg a => Formula.neg (Formula.atom a)
-
-@[simp]
-def SetEntails [DecidableEq X]
-    (N : Set (Formula sig X)) (F : Formula sig X) : Prop :=
-  ∀ (I : Interpretation sig univ) (β : Assignment X univ),
-    (∀ G ∈ N, EntailsInterpret I β G) → EntailsInterpret I β F
-
-@[simp]
-def ClauseSetEntails [DecidableEq X]
-    (N : Set <| Clause sig X) (C : Clause sig X) : Prop :=
-  ∀ (I : Interpretation sig univ),
-    (∀ D ∈ N, @ValidIn _ X _ _ D I) → @ValidIn _ X _ _ C I
-
-lemma entails_setEntails [inst : DecidableEq X]
-    (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @SetEntails _ X univ _ {F} G := by simp
 
 @[simp]
 def ClauseSatisfiable [DecidableEq X] (C : Clause sig X) : Prop :=
@@ -168,8 +171,10 @@ lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : Decida
   exact hγ
 
 /- ### Lemmas Related to Entailment
-In the following section, we prove several lemmas that will be vital in our soundness proof. -/
+In the following section, we prove several lemmas from the lecture notes that will be vital for our
+soundness proof. -/
 
+/- Composition β ∘ σ of an assignment β with a substitution σ -/
 @[simp]
 def Assignment.compose [DecidableEq X] (I : Interpretation sig univ) (β : Assignment X univ)
     (σ : Substitution sig X) : Assignment X univ :=
@@ -191,6 +196,7 @@ lemma Assignment.compose_term_eq_eval_compose [DecidableEq X] (I : Interpretatio
   · simp_all only [compose_term, Term.eval.eq_1, compose]
   · simp_all only [compose_term, List.map_subtype, List.unattach_attach, Term.eval.eq_2]
 
+/- I(β)(tσ) = I(β ∘ σ)(t) -/
 theorem substitution_lemma [DecidableEq X]
     (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (t : Term _ _) :
     Term.eval I β (t.substitute σ) = Term.eval I (Assignment.compose I β σ) t := by
@@ -207,6 +213,7 @@ theorem substitution_lemma [DecidableEq X]
       simp_all only [List.map_inj_left, Function.comp_apply, implies_true]
     rw [hargsarequal]
 
+/- I(β)(Fσ) = A(β ∘ σ)(F) -/
 theorem three_three_five [DecidableEq X]
     (I : Interpretation sig univ) (β : Assignment X univ) (σ : Substitution _ _) (C : Clause _ _) :
     Formula.eval I β (C.substitute σ) = Formula.eval I (Assignment.compose I β σ) C := by
@@ -242,7 +249,9 @@ theorem three_three_six [DecidableEq X]
   rw [EntailsInterpret, EntailsInterpret, ← eq_iff_iff]
   exact three_three_five I β σ C
 
-/- ### Lemma 3.3.7 -/
+/- A ⊨ ∀ x1, ..., xn F ↔ A ⊨ F
+Since we do not demand that F is a closed formula, this statement is slightly stronger than the
+one in the lecture notes. Regardless, this proof has the same structure as the one in the notes. -/
 lemma three_three_seven [DecidableEq X] (n : ℕ) (F : Formula sig X) (I : Interpretation sig univ)
     (xs : List X) (huniq : xs.Nodup) (hn : xs.length = n) :
     ValidIn (F.bigForall _ _ xs) I ↔ ValidIn F I := by
@@ -281,6 +290,7 @@ lemma three_three_seven [DecidableEq X] (n : ℕ) (F : Formula sig X) (I : Inter
       intro a
       exact ih (n - 1) (List.Nodup.of_cons huniq) (Nat.eq_sub_of_add_eq hn) (β.modify x a)
 
+/- Used in the following proof. -/
 lemma valid_sub_of_valid {I : Interpretation sig univ} [DecidableEq X] (C : Clause sig X)
     (σ : Substitution sig X) :
     ValidIn (Clause.toFormula sig X C) I →
@@ -291,6 +301,7 @@ lemma valid_sub_of_valid {I : Interpretation sig univ} [DecidableEq X] (C : Clau
   rw [three_three_five]
   exact hvalid
 
+/- A ⊨ ∀ x1, ..., xn F → A ⊨ ∀ y1, ..., yn F -/
 lemma three_three_eight {sig : Signature} {X : Variables} [DecidableEq X] (C : Clause sig X)
     (I : Interpretation sig univ) (σ : Substitution sig X) (n m : ℕ)
     (xs ys : List X) (hxuniq : xs.Nodup) (hn : xs.length = n)

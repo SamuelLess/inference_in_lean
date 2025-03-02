@@ -3,8 +3,10 @@ import Mathlib.Data.Finset.Range
 
 set_option autoImplicit false
 
-/- ## 3.1 Syntax
-In the following only syntactical notions are defined. -/
+/-! ## 3.1 Syntax
+In this section, we define the basic syntactic notions for first-order logic. This includes terms,
+atoms, formulas, Literals, and clauses. For each of these constructs, we also define its set of
+free variables, and how substitutions act on them. -/
 
 namespace Syntax
 

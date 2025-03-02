@@ -5,8 +5,10 @@ set_option autoImplicit false
 
 open Syntax
 
-/- ## 3.2 Semantics
-Here, the syntatic definitions are expanded upon with semantic interpretations.  -/
+/-! ## 3.2 Semantics
+In this section we expand our syntactic definitions with semantic interpretations, defining how
+to evaluate them under an assignment β. In addition, we define modifications of assignments and show
+that the evaluation of closed formulas does not depend on assignments. -/
 
 namespace Semantics
 
