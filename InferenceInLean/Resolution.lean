@@ -27,11 +27,7 @@ def GroundResolutionRule (A : Atom sig Empty) (C D : Clause sig Empty) : Inferen
 def GroundFactorizationRule (A : Atom sig Empty) (C : Clause sig Empty) : Inference sig Empty :=
   ⟨{.pos A :: .pos A :: C}, .pos A :: C, True⟩
 
-/--
-Both rules of the Resolution Calculus.
-Note that at the moment this is an inference system.
-Ideally we could somehow move the `A C D` inside the rules to use factorization without `D`.
--/
+/-- Both rules of the Resolution Calculus. -/
 @[simp]
 def GroundResolution (sig : Signature) (A : Atom sig Empty) (C D : Clause sig Empty) :
     InferenceSystem sig Empty :=
@@ -185,15 +181,7 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
     · exact hCσ
 
   have hBσeqAσ: ∀ (β : Assignment X univ), Atom.eval I β (A.substitute σ)
-      = Atom.eval I β (B.substitute σ) := by
-    intro β
-    have hunif : A.substitute σ = B.substitute σ := by
-      obtain ⟨hσunif, _⟩ := hmgu
-      simp only [Unifier, EqualityProblem.eq_1, List.mem_singleton, Atom.substitute,
-        Atom.pred.injEq, forall_eq] at hσunif
-      simp only [Atom.substitute, Atom.pred.injEq]
-      exact hσunif
-    rw [hunif]
+      = Atom.eval I β (B.substitute σ) := by aesop
 
   have hCDσ : ∀ β' : Assignment X univ, EntailsInterpret I β' (Clause.substitute σ (D ++ C)) := by
     intro β'
@@ -215,5 +203,35 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
       generalize List.map (Literal.substitute σ) C = C'
       apply (@eval_append_iff_eval_or sig X univ _ I β' D' C').mpr
       aesop
-
   exact validclosed_of_valid hCDσ β
+
+theorem generalFactorizationRuleSound [DecidableEq X] (A B : Atom sig X) (C : Clause sig X)
+    (σ : Substitution sig X) (hmgu : MostGeneralUnifier [(A, B)] σ) :
+    @Entails _ _ univ _
+      (Clause.toClosedFormula sig X (.pos B :: .pos A :: C))
+      ((Clause.substitute σ (.pos A :: C)).toClosedFormula) := by
+  intro I β hentails
+  let pre_inner : Clause sig X := (.pos B :: .pos A :: C)
+  let pre : Formula sig X := pre_inner.toClosedFormula
+  have hpreclosed : pre.closed := by exact Clause.closedClause_closed sig X pre_inner
+  have hprevalid : ValidIn pre I := validIn_of_entails_closed I _ hpreclosed (by use β)
+
+  -- use 3.3.8
+  let prexs : List X := pre_inner.freeVarsList
+  let pren : ℕ := prexs.length
+  have hprexsnodup : prexs.Nodup := by exact nodup_clauseFreeVarsList sig X pre_inner
+  let preys : List X := (pre_inner.substitute σ).freeVarsList
+  let prem : ℕ := preys.length
+  have hpreysnodup : preys.Nodup := by
+    exact nodup_clauseFreeVarsList sig X (Clause.substitute σ pre_inner)
+  have h338 := three_three_eight _ _ σ _ _ _ _ hprexsnodup rfl hpreysnodup rfl hprevalid
+
+  -- use 3.3.7
+  have hpreinnersub : @ValidIn _ X _ _ (pre_inner.substitute σ) I := by
+    exact (three_three_seven preys.length
+      (Clause.toFormula sig X (Clause.substitute σ pre_inner)) I preys hpreysnodup rfl).mp
+      h338
+
+  have hACσ : ∀ β' : Assignment X _, EntailsInterpret I β' (Clause.substitute σ (.pos A :: C)) := by
+    aesop
+  exact validclosed_of_valid hACσ β
