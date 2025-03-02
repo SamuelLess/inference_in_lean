@@ -1,4 +1,4 @@
-import InferenceInLean.Resolution
+import InferenceInLean.F_Resolution
 import Mathlib.Data.Finset.Defs
 import Mathlib.Data.Set.Card
 import Mathlib.SetTheory.Cardinal.Finite

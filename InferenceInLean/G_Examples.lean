@@ -1,4 +1,4 @@
-import InferenceInLean.Resolution
+import InferenceInLean.F_Resolution
 import Mathlib.Data.Finset.Defs
 
 set_option autoImplicit false

@@ -1,5 +1,5 @@
-import InferenceInLean.Syntax
-import InferenceInLean.Semantics
+import InferenceInLean.A_Syntax
+import InferenceInLean.B_Semantics
 
 set_option autoImplicit false
 --set_option diagnostics true

@@ -1,4 +1,4 @@
-import InferenceInLean.Syntax
+import InferenceInLean.A_Syntax
 
 set_option autoImplicit false
 --set_option diagnostics true

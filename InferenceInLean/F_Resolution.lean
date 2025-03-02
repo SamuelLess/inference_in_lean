@@ -1,8 +1,8 @@
-import InferenceInLean.Syntax
-import InferenceInLean.Semantics
-import InferenceInLean.Models
-import InferenceInLean.Unification
-import InferenceInLean.Inference
+import InferenceInLean.A_Syntax
+import InferenceInLean.B_Semantics
+import InferenceInLean.C_Models
+import InferenceInLean.D_Unification
+import InferenceInLean.E_Inference
 
 set_option autoImplicit false
 --set_option diagnostics true
