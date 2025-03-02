@@ -14,7 +14,6 @@ def Universes := Type
 
 variable (sig : Signature) (X : Variables) (univ : Universes)
 
-/- A = (UA, (fA : UA n → UA)_f/n∈Ω, (PA ⊆ UA^m)P/m∈Π) -/
 structure Interpretation where
   functions : sig.funs -> (List univ -> univ)
   predicates : sig.preds -> (List univ -> Prop)
@@ -27,15 +26,18 @@ def HerbrandInterpretation (sig : Signature) (preds : sig.preds -> List (GroundT
 > β : X → univ
 -/
 
+/-- Assignments are the semantic counterparts of substitution. -/
 @[simp]
 def Assignment := X → univ
 
+/-- Similarly to substitions, we can modify an assignment β by stating that it should assign some
+variable x to some element a instead. In the lecture notes, this is written as β[x ↦ a]. -/
 @[simp]
 def Assignment.modify {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (x : X) (a : univ) : Assignment X univ :=
   fun y => if y = x then a else β y
 
--- β[x1 ↦ β(x1), ..., xn ↦ β(xn)] = β
+/-- β[x ↦ β(x)] = β -/
 @[simp]
 lemma Assignment.modify_rfl [DecidableEq X]
     (β : Assignment X univ) (x : X) : β.modify x (β x) = β := by
@@ -45,13 +47,16 @@ lemma Assignment.modify_rfl [DecidableEq X]
   · rw [heq]
   · rfl
 
--- x ≠ y → β[x ↦ a, y ↦ b] = β[y ↦ b, x ↦ a]
+/-- x ≠ y → β[x ↦ a, y ↦ b] = β[y ↦ b, x ↦ a] -/
 @[simp]
 def Assignment.modify_comm {X : Variables} {univ : Universes} [DecidableEq X]
     {β : Assignment X univ} (x y : X) (a b : univ) :
     x ≠ y → (β.modify x a).modify y b = (β.modify y b).modify x a := by
   aesop
 
+/- With the help of an assignment β, we can define evaluations on terms, atoms, and formulas: In the
+base case, we have some variable x, so we just apply β to it. For all other cases, we apply β
+inductively. -/
 @[simp]
 def Term.eval {sig : Signature} {X : Variables} {univ : Universes}
     (I : Interpretation sig univ) (β : Assignment X univ) : Term sig X -> univ
@@ -77,116 +82,14 @@ def Formula.eval {sig : Signature} {X : Variables} {univ : Universes} [Decidable
   | Formula.all x f => ∀ a : univ, Formula.eval I (β.modify x a) f
   | Formula.ex x f => ∃ a : univ, Formula.eval I (β.modify x a) f
 
-@[simp]
-lemma Term.eval_without_free_not_term {sig : Signature} {X : Variables} [DecidableEq X]
-    (t : Term sig X) : t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by aesop
-
-lemma Set.singleton_of_union_empty {α : Type} {x : α} {A B : Set α}
-    (h : ¬A = {x}) (hsingleton : A ∪ B = {x}) : A = ∅ := by
-  have sub : A ⊆ {x} := by
-    rw [← hsingleton]
-    exact Set.subset_union_left
-  have : A = ∅ ∨ A = {x} := by
-    exact Set.subset_singleton_iff_eq.mp sub
-  simp_all only [Set.subset_singleton_iff, or_false]
-
-@[simp]
-lemma Term.subterms_closed {sig : Signature} {X : Variables} {_I : Interpretation sig univ}
-    [DecidableEq X] (t : Term sig X) (_x : X) :
-    ∀ (f : sig.funs) (args : List (Term sig X)), t = Term.func f args →
-    t.freeVars = {} →
-    ∀ (arg : Term sig X) (_harg : arg ∈ args), arg.freeVars = {} := by
-  intro f args ht hclosed arg harg
-  subst ht
-  induction' args with arg' args' ih generalizing arg
-  · simp_all only [List.not_mem_nil]
-  · aesop
-
-@[simp]
-lemma Term.one_freeVar_of_subterms {univ : Universes} {sig : Signature} {X : Variables}
-    (_I : Interpretation sig univ) [DecidableEq X] {t : Term sig X} {x : X} :
-    ∀ (f : sig.funs) (args : List (Term sig X)), t = Term.func f args →
-    t.freeVars = {x} →
-    ∀ (arg : Term sig X) (_harg : arg ∈ args), arg.freeVars = {x} ∨ arg.freeVars = {} := by
-  intro f args ht honefree arg harg
-  induction' args with arg' args' ih generalizing arg t
-  · simp_all only [Term.freeVars.eq_2, Term.func.injEq, or_self, List.not_mem_nil]
-  · simp_all only [Term.freeVars.eq_3, Term.func.injEq, List.cons_ne_self, and_false,
-    IsEmpty.forall_iff, implies_true, List.mem_cons]
-    by_cases h : Term.freeVars sig X arg = {x}
-    · left
-      exact h
-    · rcases harg with h₁ | h₂
-      · subst h₁
-        subst ht
-        simp_all only [false_or]
-        clear ih
-        generalize Term.freeVars sig X arg = A, Term.freeVars sig X (Term.func f args') = B at *
-        exact Set.singleton_of_union_empty h honefree
-      · subst ht
-        simp_all only [false_or]
-        specialize @ih (Term.func f args') rfl
-        by_cases h' : Term.freeVars sig X (Term.func f args') = {x}
-        · specialize ih h' arg h₂
-          simp_all only [Set.union_singleton, false_or]
-        · simp_all only [IsEmpty.forall_iff]
-          generalize hA : Term.freeVars sig X (Term.func f args') = A,
-            hB : Term.freeVars sig X arg' = B at *
-          have hempty : A = {} := by
-            rw [Set.union_comm] at honefree
-            exact Set.singleton_of_union_empty h' honefree
-          clear honefree
-          induction' args' with arg' args ih
-          · simp_all only [List.not_mem_nil]
-          · aesop
-
-@[simp]
-lemma Assignment.eval_closed_term {sig : Signature} {X : Variables} {I : Interpretation sig univ}
-    [DecidableEq X] (t : Term sig X)
-    (x : X) : t.freeVars = {} → ∀ (β γ : Assignment X univ) (_a : univ),
-      Term.eval I β t = Term.eval I γ t := by
-  intro hclosed β γ a
-  induction' t using Term.induction with y args ih f generalizing β γ a
-  · simp_all only [Term.freeVars.eq_1, Set.singleton_ne_empty]
-  · simp_all only [Assignment, Term.eval, List.map_subtype, List.unattach_attach]
-    have hargsareequal : List.map (Term.eval I β) args =
-        List.map (Term.eval I γ) args := by
-      simp_all only [List.map_inj_left]
-      intro arg harg
-      have s := @Term.subterms_closed univ sig X I _ (Term.func f args) x f args rfl hclosed
-        arg harg
-      specialize ih arg harg s β γ a
-      rw [ih]
-    rw [← hargsareequal]
-
-@[simp]
-lemma Assignment.eval_term_with_one_free {univ : Universes} {sig : Signature} {X : Variables}
-    {I : Interpretation sig univ} [DecidableEq X] {t : Term sig X}
-    {x : X} : t.freeVars = {x} → ∀ (β γ : Assignment X univ) (a : univ),
-      Term.eval I (β.modify x a) t = Term.eval I (γ.modify x a) t := by
-  intro honefree β γ a
-  induction' t using Term.induction with y args ih f
-  · simp_all only [Term.freeVars.eq_1, Set.singleton_eq_singleton_iff, Term.eval, modify,
-      ↓reduceIte]
-  · simp_all only [Term.eval, List.map_subtype, List.unattach_attach]
-    have hargsareequal :
-        List.map (Term.eval I (β.modify x a)) args =
-          List.map (Term.eval I (γ.modify x a)) args := by
-      simp_all only [List.map_inj_left]
-      intro arg harg
-      have honeornone := Term.one_freeVar_of_subterms I f args rfl honefree arg harg
-      rcases honeornone with hone | hnone
-      · aesop
-      · apply Assignment.eval_closed_term
-        · exact x
-        · simp_all only
-        · exact a
-    rw [hargsareequal]
+/- ### Assignment.bigModify -/
 
 lemma List.reduce_to_empty {α β: Type} {xs : List α} {as : List β}
     (hlen : xs.length = as.length) (hzero : as.length = 0 ∨ xs.length = 0) : xs = [] ∧ as = [] := by
   simp_all only [List.length_eq_zero, or_self, and_true, List.length_nil]
--- β[x1 ↦ a1, ..., xn ↦ an]
+
+/-- This produces a modification β[x1 ↦ a1, ..., xn ↦ an] for an arbitrary amount of modified
+variables. -/
 @[simp]
 def Assignment.bigModify {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) :
@@ -195,12 +98,12 @@ def Assignment.bigModify {X : Variables} {univ : Universes} [DecidableEq X]
   | x :: xs, a :: as => Assignment.bigModify (β.modify x a) xs as
   | _, _ => β
 
--- β[] = β
+/- β[] = β -/
 @[simp]
 lemma Assignment.bigModify_empty {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) : β.bigModify [] [] = β := rfl
 
--- β[x ↦ a, x1 ↦ a1, ..., xn ↦ xn] (x) = a
+/- β[x ↦ a, x1 ↦ a1, ..., xn ↦ xn] (x) = a -/
 @[simp]
 lemma Assignment.bigModify_single_eq {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (huniq : xs.Nodup) (as : List univ)
@@ -217,6 +120,7 @@ lemma Assignment.bigModify_single_eq {X : Variables} {univ : Universes} [Decidab
       exact ih (β.modify y b) (List.Nodup.of_cons huniq) as
         (Nat.succ_inj'.mp hlen) x a (by exact List.not_mem_of_not_mem_cons hx)
 
+/- β[x1 ↦ a1, ..., xn ↦ an, x ↦ a] = β[x1 ↦ a1, ..., xn ↦ an] [x ↦ a] -/
 @[simp]
 lemma Assignment.bigModify_append {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) (n : ℕ) (hn : n = xs.length)
@@ -235,6 +139,7 @@ lemma Assignment.bigModify_append {X : Variables} {univ : Universes} [DecidableE
       rw [ih]
     | [], [] => rfl
 
+/- x ∉ {x1, ..., xn} →  β[x1 ↦ a1, ..., xn ↦ an] [x ↦ a] = β[x ↦ a] [x1 ↦ a1, ..., xn ↦ an] -/
 @[simp]
 lemma Assignment.bigModify_modify {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) (y : X) (b : univ)
@@ -258,13 +163,14 @@ lemma Assignment.bigModify_modify {X : Variables} {univ : Universes} [DecidableE
       simp_all only [List.nodup_nil, List.not_mem_nil, not_false_eq_true, List.length_nil,
         bigModify, implies_true, Nat.add_one_ne_zero]
 
+/- β[x1 ↦ a1, ..., xn ↦ an] [x ↦ a] (x) = a -/
 @[simp]
 lemma Assignment.bigModify_add_nondup {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) (x : X) (a : univ) :
     ((β.bigModify xs as).modify x a) x = a := by
   simp_all only [modify, ↓reduceIte]
 
--- y ∉ [x1, ..., xn] → β[x1 ↦ a1, ..., xn ↦ an] y = β y
+/- y ∉ [x1, ..., xn] → β[x1 ↦ a1, ..., xn ↦ an] y = β y -/
 @[simp]
 lemma Assignment.bigModify_nonmem {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (y : X) (hnonmem : y ∉ xs)
@@ -283,7 +189,7 @@ lemma Assignment.bigModify_nonmem {X : Variables} {univ : Universes} [DecidableE
       rw [ih]
       simp_all only [List.mem_cons, not_or, modify, ↓reduceIte]
 
--- surjectivity: ∀ a ∈ [a1, ..., an], ∃ x ∈ [x1, ..., xn], β[a₁, ..., an] (x) = a
+/- Surjectivity: ∀ a ∈ [a1, ..., an], ∃ x ∈ [x1, ..., xn], β[a₁, ..., an] (x) = a -/
 lemma Assignment.bigModify_sur {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (huniq : xs.Nodup) (as : List univ)
     (a : univ) (ha : a ∈ as) (hlen : xs.length = as.length) :
@@ -326,7 +232,7 @@ lemma List.nodup_index_unique {α} [DecidableEq α] {l : List α} {a : α}
   · intro j hjinbounds heq
     exact (List.Nodup.getElem_inj_iff huniq).mp (id (Eq.symm heq))
 
--- β[x1 ↦ a1, ..., xi ↦ ai, ..., xn ↦ an] (xi) = ai
+/- β[x1 ↦ a1, ..., xi ↦ ai, ..., xn ↦ an] (xi) = ai -/
 @[simp]
 lemma Assignment.bigModify_single_index {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (huniq : xs.Nodup) (as : List univ)
@@ -404,7 +310,7 @@ lemma Assignment.bigModify_mem {X : Variables} {univ : Universes} [DecidableEq X
   simp only [← heq, h]
   exact bigModify_single_index β xs huniq as n hn hnempty hlen i hinbounds
 
--- An alternative way to formalize expressions of the form β[x1 ↦ a1, ..., xn ↦ an]
+/- An alternative way to formalize modifications of the form β[x1 ↦ a1, ..., xn ↦ an]. -/
 @[simp]
 def Assignment.modFn {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) (hlen : xs.length = as.length) :
@@ -423,7 +329,7 @@ lemma Assignment.modFn_single {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (x : X) (a : univ) :
     β.modFn [x] [a] rfl = β.modify x a := by aesop
 
--- Proof that both assignment definitions are equal
+/- Proof that both assignment definitions are equal. -/
 lemma Assignment.bigModify_eq_modFn {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) (hnempty : xs ≠ [])
     (hlen : xs.length = as.length) (huniq : xs.Nodup) :
@@ -434,7 +340,7 @@ lemma Assignment.bigModify_eq_modFn {X : Variables} {univ : Universes} [Decidabl
   · exact Assignment.bigModify_mem β xs as.length (id (Eq.symm hlen)) hnempty as hlen huniq y hmem
   · exact Assignment.bigModify_nonmem β xs y hmem as hlen
 
--- β [x1 ↦ β(x1), ..., xn ↦ β(xn)] = β
+/- β [x1 ↦ β(x1), ..., xn ↦ β(xn)] = β -/
 lemma Assignment.substitute_equality {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) :
     β = Assignment.bigModify β xs (xs.map β) := by
@@ -456,6 +362,58 @@ lemma Assignment.modFn_eq_id {X : Variables} {univ : Universes} [DecidableEq X]
   · have hasnone : as[i]? = none := getElem?_neg as i hin
     have hxsnone : xs[i]? = none := by simp_all only [not_lt, getElem?_eq_none]
     rw [hasnone, hxsnone, Option.map]
+
+/- ### Evaluations with regards to free variables
+In this section, we show that the evaluation of a closed formula F does not depend on the
+assignment, i.e. A(β)(F) = A(γ)(F) for all assignments β, γ.
+To do so, we first prove a more general statement: Whenever the free variables of a Formula F are
+contained in [x1, ..., xn], then A(β[x1 ↦ a1, ..., xn ↦ an])(F) = A(γ[x1 ↦ a1, ..., xn ↦ an])(F)
+for all assignments β, γ. We need to prove this statement inductively for both terms and atoms as
+well.
+We then receive the special case A(β[])(F) = A(γ[])(F) on closed formulas. -/
+
+@[simp]
+lemma Assignment.eval_closed_term {sig : Signature} {X : Variables} {I : Interpretation sig univ}
+    [DecidableEq X] (t : Term sig X)
+    (x : X) : t.freeVars = {} → ∀ (β γ : Assignment X univ) (_a : univ),
+      Term.eval I β t = Term.eval I γ t := by
+  intro hclosed β γ a
+  induction' t using Term.induction with y args ih f generalizing β γ a
+  · simp_all only [Term.freeVars.eq_1, Set.singleton_ne_empty]
+  · simp_all only [Assignment, Term.eval, List.map_subtype, List.unattach_attach]
+    have hargsareequal : List.map (Term.eval I β) args =
+        List.map (Term.eval I γ) args := by
+      simp_all only [List.map_inj_left]
+      intro arg harg
+      have s := Term.subterms_closed (Term.func f args) x f args rfl hclosed
+        arg harg
+      specialize ih arg harg s β γ a
+      rw [ih]
+    rw [← hargsareequal]
+
+@[simp]
+lemma Assignment.eval_term_with_one_free {univ : Universes} {sig : Signature} {X : Variables}
+    {I : Interpretation sig univ} [DecidableEq X] {t : Term sig X}
+    {x : X} : t.freeVars = {x} → ∀ (β γ : Assignment X univ) (a : univ),
+      Term.eval I (β.modify x a) t = Term.eval I (γ.modify x a) t := by
+  intro honefree β γ a
+  induction' t using Term.induction with y args ih f
+  · simp_all only [Term.freeVars.eq_1, Set.singleton_eq_singleton_iff, Term.eval, modify,
+      ↓reduceIte]
+  · simp_all only [Term.eval, List.map_subtype, List.unattach_attach]
+    have hargsareequal :
+        List.map (Term.eval I (β.modify x a)) args =
+          List.map (Term.eval I (γ.modify x a)) args := by
+      simp_all only [List.map_inj_left]
+      intro arg harg
+      have honeornone := Term.one_freeVar_of_subterms f args rfl honefree arg harg
+      rcases honeornone with hone | hnone
+      · aesop
+      · apply Assignment.eval_closed_term
+        · exact x
+        · simp_all only
+        · exact a
+    rw [hargsareequal]
 
 lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables}
     [inst : DecidableEq X] (I : Interpretation sig univ) (T : Term sig X) (xs : List X)
@@ -532,8 +490,8 @@ lemma Atom.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
   rw [hargsareequal]
 
 
--- this lemma is extracted from the following induction on Formula, and is used for both the
--- induction step for ∀ and the one for ∃
+/- This lemma is extracted from the following induction on formulas, and is used in both the
+induction step for ∀ and the one for ∃. -/
 lemma Formula.inductionStep_quantifier {univ : Universes} {sig : Signature} {X : Variables}
   [inst : DecidableEq X] (I : Interpretation sig univ) (y : X) (F : Formula sig X) (xs : List X)
   (as : List univ) (β γ : Assignment X univ)
@@ -634,7 +592,7 @@ lemma Formula.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variab
       exact inductionStep_quantifier I y F xs as β γ ih hlen hfree a heval
     · exact fun a ↦ himp
 
-lemma Formula.eval_of_closed {univ : Universes} {sig : Signature} {X : Variables}
+theorem Formula.eval_of_closed {univ : Universes} {sig : Signature} {X : Variables}
     [inst : DecidableEq X] (I : Interpretation sig univ) (F : Formula sig X)
     (hclosed : Formula.closed F) :
     (∀ (β γ : Assignment X univ), Formula.eval I β F = Formula.eval I γ F) := by

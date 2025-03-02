@@ -8,6 +8,8 @@ In the following only syntactical notions are defined. -/
 
 namespace Syntax
 
+/- ### Basic Definitions -/
+
 structure Signature where
   /-- The type of the syntactic function symbols -/
   funs : Type
@@ -18,12 +20,16 @@ def Variables := Type
 
 variable (sig : Signature) (X : Variables)
 
+/- Terms are either variables x, or functions f(t1, ..., tn) with subterms t1, ..., tn; this allows
+us to define constants as functions f() of arity zero (i.e., args = []). -/
 inductive Term where
   | var (x : X)
   | func (f : sig.funs) (args: List Term)
 
 abbrev GroundTerm (sig : Signature) := Term sig Empty
 
+/- Term is a nested inductive type, so induction does not work out of the box. Rather than proving
+statements about terms via recursion, we define our own induction scheme. -/
 lemma Term.induction {P : (Term sig X) → Prop}
     (base : ∀ x : X, P (var x)) (step : ∀ (args : List (Term sig X)),
       (ih : ∀ term ∈ args, P term) → ∀ (f : sig.funs), P (func f args)) :
@@ -57,6 +63,9 @@ end
 
 instance [instX : BEq X] [instF : BEq sig.funs] : BEq (Term sig X) := ⟨eqTerm sig X⟩
 
+/- Defining free variables for terms is straight-forward: Every variable occurring in a term is
+free per default. The free variables of a function f(t1, ..., tn) are the union of the free
+variables of the subterms t1, ..., tn. -/
 @[simp]
 def Term.freeVars : Term sig X -> Set X
   | .var x => {x}
@@ -78,6 +87,7 @@ lemma Term.arg_subset_of_freeVars {sig : Signature} {X : Variables}
       rw [Term.freeVars]
       exact Set.subset_union_of_subset_right ih (Term.freeVars sig X arg')
 
+/- Atoms are of the form P(t1, ..., tn) with terms t1, ..., tn. -/
 inductive Atom where
   | pred (p : sig.preds) (args : List (Term sig X))
 
@@ -87,7 +97,9 @@ def Atom.freeVars {sig : Signature} {X : Variables} : Atom sig X -> Set X
   | .pred P (a :: args) => a.freeVars ∪ (Atom.pred P args).freeVars
 
 inductive Literal where
+  /-- a -/
   | pos (a : Atom sig X)
+  /-- ¬a -/
   | neg (a : Atom sig X)
 
 @[simp]
@@ -107,6 +119,7 @@ instance : Append (Clause sig X) :=
 instance : HAppend (Clause sig X) (Clause sig X) (Clause sig X) :=
   instHAppendOfAppend
 
+/- This follows the definition from the lecture notes, though ¬, ∧, ∀ would suffice. -/
 inductive Formula where
   | falsum
   | verum
@@ -119,6 +132,11 @@ inductive Formula where
   | all (x : X) (f : Formula)
   | ex (x : X) (f : Formula)
 
+/-- ⊤ and ⊥ have no free variables. The free variables of ¬F are the free variables of F. For
+F * G, with * ⊆ {∧, ∨, →, ↔}, the free formulas are the union of the free formulas of F and the
+free formulas of G.
+Quantifiers can bind variables: The free variables of ∀ x, F and ∃ x, F are the free variables of
+F with x removed.  -/
 @[simp]
 def Formula.freeVars {sig : Signature} {X : Variables} : Formula sig X -> Set X
   | Formula.falsum => ∅
@@ -132,13 +150,26 @@ def Formula.freeVars {sig : Signature} {X : Variables} : Formula sig X -> Set X
   | Formula.all x f => Formula.freeVars f \ {x}
   | Formula.ex x f => Formula.freeVars f \ {x}
 
+/-- A clause [a1, ..., an] can be converted into a formula a1 ∨ ... ∨ an -/
+@[simp]
+def Clause.toFormula : Clause sig X -> Formula sig X
+  | [] => Formula.falsum
+  | .pos l :: ls => (Formula.atom l).or (Clause.toFormula ls)
+  | .neg l :: ls => Formula.or (Formula.atom l).neg (Clause.toFormula ls)
+
+instance : Coe (Clause sig X) (Formula sig X) :=
+  ⟨Clause.toFormula sig X⟩
+
+instance : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
+  ⟨fun N => {↑C | C ∈ N}⟩
+
 @[simp]
 def Formula.closed {sig : Signature} {X : Variables} (F : Formula sig X) : Prop :=
   Formula.freeVars F = ∅
 
-/--
- Creates formula ∀ x_1 ... x_n, F.
--/
+/- ### bigForall -/
+
+/-- Creates formula ∀ x1 ... xn, F. -/
 @[simp]
 def Formula.bigForall [DecidableEq X]
     (xs : List X) (F : Formula sig X) : Formula sig X :=
@@ -146,6 +177,7 @@ def Formula.bigForall [DecidableEq X]
   | [] => F
   | x :: xs => .all x (F.bigForall xs)
 
+/-- The free formulas of ∀ x1 ... xn, F are a subset of the free formulas of F. -/
 @[simp]
 lemma Formula.bigForall_freeVars_subset [DecidableEq X] (xs : List X) (F : Formula sig X) :
     (F.bigForall sig X xs).freeVars ⊆ F.freeVars := by
@@ -158,6 +190,7 @@ lemma Formula.bigForall_freeVars_subset [DecidableEq X] (xs : List X) (F : Formu
     apply ih
     simp_all only
 
+/-- The free variables of ∀ x, ∀ x1 ... xn, F are the free variables of ∀ x1 ... xn, ∀ x, F. -/
 lemma Formula.bigForall_all [DecidableEq X] (xs : List X) (F : Formula sig X) (x : X) :
     (bigForall sig X xs (all x F)).freeVars = (all x (bigForall sig X xs F)).freeVars := by
   simp_all only [freeVars]
@@ -173,6 +206,8 @@ lemma Formula.bigForall_all [DecidableEq X] (xs : List X) (F : Formula sig X) (x
     · intro a
       simp_all only [not_false_eq_true, and_self]
 
+/-- If the free variables of F are contained in [x1, ..., xn], then the formula ∀ x1 ... xn, F
+is closed. -/
 @[simp]
 lemma Formula.bigForall_subset_freeVars [DecidableEq X] (xs : List X) (F : Formula sig X) :
     F.freeVars ⊆ xs.toFinset → (F.bigForall sig X xs).closed := by
@@ -187,18 +222,74 @@ lemma Formula.bigForall_subset_freeVars [DecidableEq X] (xs : List X) (F : Formu
     have hsymm := bigForall_all sig X xs F x
     simp_all only [freeVars]
 
+/- ### Lemmas related to free variables -/
+
+/- A term without free variables cannot be a variable. -/
 @[simp]
-def Clause.toFormula : Clause sig X -> Formula sig X
-  | [] => Formula.falsum
-  | .pos l :: ls => (Formula.atom l).or (Clause.toFormula ls)
-  | .neg l :: ls => Formula.or (Formula.atom l).neg (Clause.toFormula ls)
+lemma Term.eval_without_free_not_term {sig : Signature} {X : Variables} [DecidableEq X]
+    (t : Term sig X) : t.freeVars = {} → ¬∃ (x : X), t = Term.var x := by aesop
 
-instance : Coe (Clause sig X) (Formula sig X) :=
-  ⟨Clause.toFormula sig X⟩
+lemma Set.singleton_of_union_empty {α : Type} {x : α} {A B : Set α}
+    (h : ¬A = {x}) (hsingleton : A ∪ B = {x}) : A = ∅ := by
+  have sub : A ⊆ {x} := by
+    rw [← hsingleton]
+    exact Set.subset_union_left
+  have : A = ∅ ∨ A = {x} := by
+    exact Set.subset_singleton_iff_eq.mp sub
+  simp_all only [Set.subset_singleton_iff, or_false]
 
-instance : Coe (Set <| Clause sig X) (Set <| Formula sig X) :=
-  ⟨fun N => {↑C | C ∈ N}⟩
+/- All subterms t1, ..., tn of a closed term f(t1, ..., tn) are closed as well -/
+@[simp]
+lemma Term.subterms_closed {sig : Signature} {X : Variables}
+    [DecidableEq X] (t : Term sig X) (_x : X) :
+    ∀ (f : sig.funs) (args : List (Term sig X)), t = Term.func f args →
+    t.freeVars = {} →
+    ∀ (arg : Term sig X) (_harg : arg ∈ args), arg.freeVars = {} := by
+  intro f args ht hclosed arg harg
+  subst ht
+  induction' args with arg' args' ih generalizing arg
+  · simp_all only [List.not_mem_nil]
+  · aesop
 
+@[simp]
+lemma Term.one_freeVar_of_subterms {sig : Signature} {X : Variables} [DecidableEq X]
+    {t : Term sig X} {x : X} :
+    ∀ (f : sig.funs) (args : List (Term sig X)), t = Term.func f args →
+      t.freeVars = {x} → ∀ (arg : Term sig X) (_harg : arg ∈ args),
+        arg.freeVars = {x} ∨ arg.freeVars = {} := by
+  intro f args ht honefree arg harg
+  induction' args with arg' args' ih generalizing arg t
+  · simp_all only [Term.freeVars.eq_2, Term.func.injEq, or_self, List.not_mem_nil]
+  · simp_all only [Term.freeVars.eq_3, Term.func.injEq, List.cons_ne_self, and_false,
+    IsEmpty.forall_iff, implies_true, List.mem_cons]
+    by_cases h : Term.freeVars sig X arg = {x}
+    · left
+      exact h
+    · rcases harg with h₁ | h₂
+      · subst h₁
+        subst ht
+        simp_all only [false_or]
+        clear ih
+        generalize Term.freeVars sig X arg = A, Term.freeVars sig X (Term.func f args') = B at *
+        exact Set.singleton_of_union_empty h honefree
+      · subst ht
+        simp_all only [false_or]
+        specialize @ih (Term.func f args') rfl
+        by_cases h' : Term.freeVars sig X (Term.func f args') = {x}
+        · specialize ih h' arg h₂
+          simp_all only [Set.union_singleton, false_or]
+        · simp_all only [IsEmpty.forall_iff]
+          generalize hA : Term.freeVars sig X (Term.func f args') = A,
+            hB : Term.freeVars sig X arg' = B at *
+          have hempty : A = {} := by
+            rw [Set.union_comm] at honefree
+            exact Set.singleton_of_union_empty h' honefree
+          clear honefree
+          induction' args' with arg' args ih
+          · simp_all only [List.not_mem_nil]
+          · aesop
+
+/- Generates the free variables of a term as a list, rather than as a set. -/
 @[simp]
 def Term.freeVarsList [DecidableEq X] : Term sig X -> List X
   | Term.var x => [x]
@@ -262,12 +353,13 @@ lemma Term.freeVarsList_sub_freeVars [DecidableEq X] (t : Term sig X) :
             simp_all only [Set.mem_setOf_eq]
           | inr h_2 => simp_all only [forall_const, or_true]
 
+/- Generates the free variables of an atom as a list, rather than as a set. -/
 @[simp]
 def Atom.freeVarsList [DecidableEq X] : Atom sig X -> List X
   | .pred _ [] => []
   | .pred P (t :: ts) => List.dedup ((t.freeVarsList).append (Atom.pred P ts).freeVarsList)
 
-def Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
+lemma Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
     a.freeVars ⊆ (a.freeVarsList).toFinset := by
   simp_all only [List.coe_toFinset]
   induction a with
@@ -290,7 +382,7 @@ def Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
         apply ih
         exact hxinfree
 
-def Atom.freeVarsList_sub_freeVars[DecidableEq X] (a : Atom sig X) :
+lemma Atom.freeVarsList_sub_freeVars[DecidableEq X] (a : Atom sig X) :
     ↑(a.freeVarsList).toFinset ⊆ a.freeVars := by
   induction' a with p args
   intro x hmem
@@ -308,13 +400,14 @@ def Atom.freeVarsList_sub_freeVars[DecidableEq X] (a : Atom sig X) :
       simp_all only [Set.mem_setOf_eq]
     | inr h_1 => simp_all only [forall_const, or_true]
 
+/- Generates the free variables of a clause as a list, rather than as a set. -/
 @[simp]
 def Clause.freeVarsList [DecidableEq X] : Clause sig X -> List X
   | [] => []
   | (.pos l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
   | (.neg l) :: ls => List.dedup (l.freeVarsList ++ freeVarsList ls)
 
-def Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
+lemma Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
     (C.toFormula).freeVars ⊆ ↑(C.freeVarsList).toFinset := by
   induction' C with lit lits ih
   · simp_all only [freeVarsList, List.toFinset_nil, Finset.coe_empty, toFormula, Formula.freeVars,
@@ -354,7 +447,7 @@ def Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
         apply ih
         simp_all only [Set.mem_setOf_eq]
 
-def Clause.freeVarsList_sub_freeVars [DecidableEq X] (C : Clause sig X) :
+lemma Clause.freeVarsList_sub_freeVars [DecidableEq X] (C : Clause sig X) :
     ↑(C.freeVarsList).toFinset ⊆ (C.toFormula).freeVars := by
   induction' C with lit lits ih
   · simp_all only [freeVarsList, List.toFinset_nil, Finset.coe_empty, toFormula, Formula.freeVars,
@@ -401,6 +494,7 @@ lemma nodup_clauseFreeVarsList [DecidableEq X] (C : Clause sig X) :
   simp_all only [Clause]
   split <;> simp_all only [List.nodup_nil, List.nodup_dedup]
 
+/-- Converts a clause to a closed formula by quantifying it with each of its free variables.  -/
 @[simp]
 def Clause.toClosedFormula [DecidableEq X] (C : Clause sig X) : Formula sig X :=
   Formula.bigForall sig X (C.freeVarsList) C
@@ -439,14 +533,24 @@ theorem Clause.closedClause_closed [DecidableEq X] (C : Clause sig X) :
     simp_all
     exact Clause.consClosed sig X head tail ih
 
+/- ### Substitutions -/
+
+/-- A substitution σ replaces each variable with another term. We do not strictly require the
+substitution to have a finite domain, as that constraint does not change the outcome of our
+proofs. -/
 @[simp]
 def Substitution := X -> Term sig X
 
+/- Modifies a substitution σ by indicating that one of the variables x should be replaced with
+another term a instead. In the lecture notes, this is written as σ[x ↦ a]. -/
 @[simp]
 def Substitution.modify {sig : Signature} {X : Variables} [DecidableEq X]
     (σ : Substitution sig X) (x : X) (a : Term sig X) : Substitution sig X :=
   fun y => if y = x then a else σ y
 
+/- The following definitions describe how substitutions work on terms, atoms, literals, and clauses
+respectively: For the base case, i.e. a variable x, we just apply the substitution to the variable.
+In all other cases, we apply the substitution inductively. -/
 @[simp]
 def Term.substitute {sig : Signature} {X : Variables} (σ : Substitution sig X) :
     Term sig X -> Term sig X

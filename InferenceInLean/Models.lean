@@ -7,16 +7,15 @@ set_option autoImplicit false
 open Syntax
 open Semantics
 
-/- ## 3.3 Models, Validity, and Satisfiability -/
+/-! ## 3.3 Models, Validity, and Satisfiability -/
 
 namespace Models
 
 variable {sig : Signature} {X : Variables} {univ : Universes}
 
-/- ### Σ-Algebra A with assignment β
-> I, β ⊨ F :⇔ I(β)(F) = True
--/
+/- ### Truth and Validity -/
 
+/-- I,β ⊨ F -/
 @[simp]
 def EntailsInterpret [DecidableEq X]
     (I : Interpretation sig univ) (β : Assignment X univ) (F : Formula sig X) : Prop :=
@@ -27,39 +26,32 @@ theorem not_entails_not [DecidableEq X]
     EntailsInterpret I β F → ¬EntailsInterpret I β (Formula.neg F) :=
   fun a a_1 ↦ a_1 a
 
+/-- F is true/valid in I: I ⊨ F -/
 @[simp]
 def ValidIn [DecidableEq X] (F : Formula sig X) (I : Interpretation sig univ) : Prop :=
   ∀ (β : Assignment X univ), EntailsInterpret I β F
 
-/- ### Validity / Tautology
-> ⊨ F :⇔ A |= F for all A ∈ Σ-Alg
--/
-
+/-- Tautology: ⊨ F -/
 @[simp]
 def Valid [DecidableEq X] (F : Formula sig X) : Prop :=
   ∀ (I : Interpretation sig univ) (β : Assignment X univ), Formula.eval I β F
 
-/- ### Entailment
-F ⊨ G, if for all A ∈ Σ-Alg and β ∈ X → UA, we have A, β |= F ⇒ A, β |= G
--/
+/- ### Entailment -/
 
+/-- Semantic entailment: F ⊨ G -/
 @[simp]
 def Entails [DecidableEq X] (F G : Formula sig X) : Prop :=
   ∀ (I : Interpretation sig univ) (β : Assignment X univ),
     EntailsInterpret I β F → EntailsInterpret I β G
 infix:60 " ⊨ " => Entails
 
-/- ### Equivalence
-
-##### Proposition 3.3.1
-> F ⊨ G if and only if F → G is valid`
--/
+/-- F ⊨ G ↔ ⊨ F → G -/
 theorem entails_iff_imp_valid [inst : DecidableEq X]
     (F G : Formula sig X) : @Entails _ _ univ _ F G ↔ @Valid _ _ univ _ (Formula.imp F G) :=
   Eq.to_iff rfl
 
+/- ### Satsfiability -/
 
-/- ### Sat -/
 @[simp]
 def Satisfiable [DecidableEq X] (F : Formula sig X) : Prop :=
   ∃ (I : Interpretation sig univ) (β : Assignment X univ), EntailsInterpret I β F
@@ -164,13 +156,8 @@ theorem setEntails_iff_union_not_unsat [inst : DecidableEq X]
     cases hGornegN I β
     aesop
 
-/- lemma term_eval_of_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
-  (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) : -/
-
-/- lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
-    (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
-    (∃ (β : Assignment X univ), EntailsInterpret I β F) → ValidIn F I := by -/
-
+/-- This lemma allows us to disregard assignments when considering the entailment of closed
+formulas. -/
 lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : DecidableEq X]
     (I : Interpretation sig univ) (F : Formula sig X) (hclosed : Formula.closed F) :
     (∃ (β : Assignment X univ), EntailsInterpret I β F) → ValidIn F I := by
@@ -180,7 +167,9 @@ lemma validIn_of_entails_closed {sig : Signature} {X : Variables} [inst : Decida
   rw [EntailsInterpret, heval, ← EntailsInterpret]
   exact hγ
 
-/- ### 3.3.4 Substitution Lemma -/
+/- ### Lemmas Related to Entailment
+In the following section, we prove several lemmas that will be vital in our soundness proof. -/
+
 @[simp]
 def Assignment.compose [DecidableEq X] (I : Interpretation sig univ) (β : Assignment X univ)
     (σ : Substitution sig X) : Assignment X univ :=
@@ -302,7 +291,6 @@ lemma valid_sub_of_valid {I : Interpretation sig univ} [DecidableEq X] (C : Clau
   rw [three_three_five]
   exact hvalid
 
-/- ### Lemma 3.3.8 -/
 lemma three_three_eight {sig : Signature} {X : Variables} [DecidableEq X] (C : Clause sig X)
     (I : Interpretation sig univ) (σ : Substitution sig X) (n m : ℕ)
     (xs ys : List X) (hxuniq : xs.Nodup) (hn : xs.length = n)
