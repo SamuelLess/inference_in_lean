@@ -6,4 +6,4 @@ We achieve this by closely following Chapter 3 of the lecture notes from the cou
 This project is licensed under the GPL v3 – see the [LICENSE](LICENSE) file for details.
 
 ## Authors
-Created by Norman Loher and Samuel Leßmann during the course 'Formalization in Lean' taught by Xavier Généreux at LMU in 2024/25.
+Created by Norman Lohrer and Samuel Leßmann during the course 'Formalization in Lean' taught by Xavier Généreux at LMU in 2024/25.
