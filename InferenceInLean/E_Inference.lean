@@ -67,6 +67,45 @@ the lecture notes. This means that we can show the soundness of an inference sys
 showing that all of its inferences are sound. -/
 theorem generalSoundness_of_soundness [inst : DecidableEq X]
     (Γ : InferenceSystem sig X) : @Soundness _ _ univ _ Γ → @GeneralSoundness _ _ univ _ Γ := by
-  /- The proof that was here before only worked due to a wrong definition of ClauseSetEntails.
-  However, the proof was still correct at least for variables being the Empty type. -/
-  sorry
+  intro hsound N F hprovable I hvalid β
+  simp_all only [Soundness, ClauseSetEntails, Clause.eq_1, ValidIn, Assignment.eq_1, EntailsInterpret, Provability]
+  obtain ⟨proof, hassumption, hconclusion⟩ := hprovable
+  have hproofsequencetrue : ∀ F ∈ proof.clauses, EntailsInterpret I β F := by
+    have hindicestrue : ∀ i (hindex : i < proof.clauses.length),
+        EntailsInterpret I β proof.clauses[i] := by
+      intro i hlen
+      induction' i using Nat.case_strong_induction_on with i ih generalizing β
+      · have hvalid := proof.is_valid 0 hlen
+        aesop
+      · have hvalid := proof.is_valid (i + 1) hlen
+        rcases hvalid with hassump | hconseq
+        · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
+        · rcases hconseq with ⟨inference, ⟨hin, ⟨hlast, hcond, hprev⟩⟩⟩
+          rw [hlast]
+          have hinfsound := hsound inference hin
+          apply hinfsound
+          · exact hcond
+          · intro inf_form hprem
+            have hinftrue := hprev inf_form hprem
+            rcases hinftrue with ⟨j, ⟨hjindex, heq⟩⟩
+            intro β
+            have hjtrue := ih j (Nat.le_of_lt_succ hjindex) β (Nat.lt_trans hjindex hlen)
+            rw [heq]
+            exact hjtrue
+    intro F hF
+    have hfindex : ∃ (i : ℕ) (hindex : i < proof.clauses.length), proof.clauses[i] = F :=
+      List.mem_iff_getElem.mp hF
+    aesop
+  have hlen : proof.clauses.length - 1 < proof.clauses.length := by
+    have hlennonzero : proof.clauses.length ≠ 0 := by
+      have hnonempty := proof.clauses_not_empty
+      simp_all only [List.empty_eq, ne_eq, List.length_eq_zero, not_false_eq_true]
+    exact Nat.sub_one_lt hlennonzero
+  have hfconclusion := proof.is_valid (proof.clauses.length - 1) hlen
+  have hfislast : proof.clauses[proof.clauses.length - 1] = F := by
+    rw [proof.last_clause_conclusion, hconclusion]
+  rw [hfislast] at hfconclusion
+  rcases hfconclusion with hl | hr
+  · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
+  · subst hfislast hassumption
+    simp_all only [Clause.eq_1, EntailsInterpret, List.getElem_mem]
