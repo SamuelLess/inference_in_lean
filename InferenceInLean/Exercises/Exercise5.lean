@@ -138,7 +138,7 @@ theorem task5_1_5  (S : Set <| GroundTerm sig5_1) (hall : ∀ t : GroundTerm sig
   have hS'encard3 : S'.encard = 3 := by
     have := hS'finite.cast_ncard_eq
     aesop
-  have hle := Set.encard_le_card hsub
+  have hle := Set.encard_le_encard hsub
   intro hSncard2
   rw [hS'encard3, hSncard2] at hle
   contradiction

@@ -87,7 +87,7 @@ lemma ex_peano_proof: @Formula.eval ex_sig_peano String ℕ instDecidableEqStrin
   · intro h
     obtain ⟨z, hz⟩ := h
     cases hz
-    simp only [Nat.lt_add_right_iff_pos, Nat.self_eq_add_right]
+    simp only [Nat.lt_add_right_iff_pos, Nat.left_eq_add]
     exact Or.symm (Nat.eq_zero_or_pos z)
 
 def exa : Formula ex_sig_peano String := .and .falsum .verum

@@ -324,8 +324,8 @@ lemma Term.freeVars_sub_freeVarsList [DecidableEq X] (t : Term sig X) :
 lemma Term.freeVarsList_sub_freeVars [DecidableEq X] (t : Term sig X) :
     ↑(t.freeVarsList).toFinset ⊆ t.freeVars := by
   induction' t using Term.induction with x args ih f
-  · simp_all only [freeVarsList, List.toFinset_cons, List.toFinset_nil, insert_emptyc_eq,
-      Finset.coe_singleton, freeVars, subset_refl]
+  · simp_all only [freeVarsList, List.toFinset_cons, List.toFinset_nil,
+      LawfulSingleton.insert_empty_eq, Finset.coe_singleton, freeVars, subset_refl]
   · induction' args with arg args ih' generalizing f
     · simp_all only [List.not_mem_nil, List.coe_toFinset, IsEmpty.forall_iff, implies_true,
         freeVarsList, List.toFinset_nil, Finset.coe_empty, freeVars, subset_refl]

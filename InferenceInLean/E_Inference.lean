@@ -99,7 +99,7 @@ theorem generalSoundness_of_soundness [inst : DecidableEq X]
   have hlen : proof.clauses.length - 1 < proof.clauses.length := by
     have hlennonzero : proof.clauses.length ≠ 0 := by
       have hnonempty := proof.clauses_not_empty
-      simp_all only [List.empty_eq, ne_eq, List.length_eq_zero, not_false_eq_true]
+      simp_all only [List.empty_eq, ne_eq, List.length_eq_zero_iff, not_false_eq_true]
     exact Nat.sub_one_lt hlennonzero
   have hfconclusion := proof.is_valid (proof.clauses.length - 1) hlen
   have hfislast : proof.clauses[proof.clauses.length - 1] = F := by

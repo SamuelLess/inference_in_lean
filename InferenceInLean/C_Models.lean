@@ -104,7 +104,7 @@ theorem ClauseSatisfiable_imp_Satisfiable [inst : DecidableEq X]
   use I, β
   induction C with
   | nil =>
-    exact False.elim (List.not_mem_nil L h_L_in_C)
+    exact False.elim (List.not_mem_nil h_L_in_C)
   | cons head Ctail ih =>
     rw [Clause.toFormula.eq_def]
     split
@@ -277,12 +277,12 @@ lemma three_three_seven [DecidableEq X] (n : ℕ) (F : Formula sig X) (I : Inter
             Nat.add_right_cancel_iff, Formula.bigForall, Formula.eval, implies_true]
         | [], [] =>
           simp_all only [ValidIn, Assignment, EntailsInterpret, List.nodup_nil, List.length_nil,
-            Nat.self_eq_add_left, Nat.add_one_ne_zero]
+            Nat.right_eq_add, Nat.add_one_ne_zero]
     set as : List univ := List.map γ xs with has
     have hsubequal : γ = Assignment.bigModify γ xs as := by
       exact Assignment.substitute_equality γ xs
     rw [hsubequal]
-    apply hlemma as (Eq.symm (List.length_map xs γ))
+    apply hlemma as (Eq.symm (List.length_map γ))
   · intro hvalid β
     induction' xs with x xs ih generalizing β n
     · simp_all only [ValidIn, Valid, Assignment, List.nodup_nil, Formula.bigForall]
