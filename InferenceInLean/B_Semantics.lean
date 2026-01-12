@@ -150,20 +150,20 @@ lemma Assignment.bigModify_modify {X : Variables} {univ : Universes} [DecidableE
   induction' n with n ih generalizing xs as β
   · obtain ⟨hxsempty, hasempty⟩ := List.reduce_to_empty hlen (by simp_all only [or_self])
     subst hxsempty hasempty
-    simp_all only [List.nodup_nil, List.not_mem_nil, not_false_eq_true, List.length_nil, Assignment,
+    simp_all only [List.not_mem_nil, not_false_eq_true, List.length_nil, Assignment,
       bigModify]
   · match xs, as with
     | x :: xs, a :: as =>
       rw [bigModify, bigModify]
       specialize ih (β.modify x a) xs as
         (List.not_mem_of_not_mem_cons hxnotinxs)
-        (by simp_all only [Assignment, List.nodup_cons, List.mem_cons, not_or, List.length_cons,
+        (by simp_all only [Assignment, List.mem_cons, not_or, List.length_cons,
           Nat.add_right_cancel_iff])
         (by exact Nat.succ_inj.mp hlen)
       rw [ih, modify_comm x y a b (Ne.symm (List.ne_of_not_mem_cons hxnotinxs))]
     | [], [] =>
-      simp_all only [List.nodup_nil, List.not_mem_nil, not_false_eq_true, List.length_nil,
-        bigModify, implies_true, Nat.add_one_ne_zero]
+      simp_all only [List.not_mem_nil, not_false_eq_true, List.length_nil,
+        Nat.add_one_ne_zero]
 
 /- β[x1 ↦ a1, ..., xn ↦ an] [x ↦ a] (x) = a -/
 @[simp]
@@ -186,7 +186,7 @@ lemma Assignment.bigModify_nonmem {X : Variables} {univ : Universes} [DecidableE
       Nat.add_one_ne_zero]
     | a :: as =>
       rw [Assignment.bigModify]
-      simp_all only [List.length_cons, Nat.add_right_cancel_iff, modify, ↓reduceIte]
+      simp_all only [List.length_cons, Nat.add_right_cancel_iff]
       specialize ih (β.modify x a) (List.not_mem_of_not_mem_cons hnonmem) as rfl
       rw [ih]
       simp_all only [List.mem_cons, not_or, modify, ↓reduceIte]
@@ -210,8 +210,11 @@ lemma Assignment.bigModify_sur {X : Variables} {univ : Universes} [DecidableEq X
       · use x
         use List.mem_cons_self
         rw [← hfirst]
+        have hnotmem : x ∉ xs := by
+          rw [List.nodup_cons] at huniq
+          exact huniq.1
         exact bigModify_single_eq
-          β xs (List.Nodup.of_cons huniq) as' (Nat.succ_inj.mp hlen) x a (List.Nodup.not_mem huniq)
+          β xs (List.Nodup.of_cons huniq) as' (Nat.succ_inj.mp hlen) x a hnotmem
       · specialize ih (β.modify x a') (List.Nodup.of_cons huniq) as' (has') (Nat.succ_inj.mp hlen)
         rcases ih with ⟨x', ⟨hxinbounds, h⟩⟩
         use x'
@@ -221,18 +224,18 @@ lemma List.nodup_index_unique {α} [DecidableEq α] {l : List α} {a : α}
     (ha : a ∈ l) (huniq : l.Nodup) :
     ∃ (i : ℕ) (hinbounds : i < l.length),
       l[i] = a ∧
-      l[l.idxOf a]'(List.idxOf_lt_length ha) = a ∧
+      l[l.idxOf a]'(List.idxOf_lt_length_of_mem ha) = a ∧
       ∀ (j : ℕ) (hjinbounds : j < l.length), l[j] = a → i = j := by
   have h := List.mem_iff_getElem.mp ha
   rcases h with ⟨i, ⟨hinbounds, hmem⟩⟩
   use i
   use hinbounds
-  subst hmem
-  simp_all only [ne_eq, List.getElem_mem, true_and]
-  split_ands
-  · exact List.getElem_idxOf (List.idxOf_lt_length ha)
+  refine ⟨hmem, ?_, ?_⟩
+  · have key : List.idxOf (l[i]) l = i := huniq.idxOf_getElem i hinbounds
+    simp
   · intro j hjinbounds heq
-    exact (List.Nodup.getElem_inj_iff huniq).mp (id (Eq.symm heq))
+    have : l[i] = l[j] := by rw [hmem, heq]
+    exact (List.Nodup.getElem_inj_iff huniq).mp this
 
 /- β[x1 ↦ a1, ..., xi ↦ ai, ..., xn ↦ an] (xi) = ai -/
 @[simp]
@@ -255,7 +258,7 @@ lemma Assignment.bigModify_single_index {X : Variables} {univ : Universes} [Deci
         have hxs : xs.length = 0 := by
           clear ih huniq hnempty hiinbounds
           simp_all only [List.length_cons, Nat.reduceLeDiff, Nat.le_zero_eq,
-            List.length_eq_zero_iff, List.length_singleton, Nat.succ_ne_self, not_false_eq_true,
+            List.length_eq_zero_iff, Nat.succ_ne_self, not_false_eq_true,
             List.length_nil]
         have has : as.length = 0 := by rw [hlen] at hxs; exact hxs
         have hxempty : xs = [] := by exact List.length_eq_zero_iff.mp hxs
@@ -282,7 +285,7 @@ lemma Assignment.bigModify_single_index {X : Variables} {univ : Universes} [Deci
           (hxsnonempty) (Nat.succ_inj.mp hlen) i (Nat.succ_lt_succ_iff.mp hiinbounds)
         subst hn
         simp_all only [List.nodup_cons, ne_eq, reduceCtorEq, not_false_eq_true, List.length_cons,
-          Nat.lt_add_left_iff_pos, bigModify, List.getElem_cons_succ]
+          Nat.lt_add_left_iff_pos, List.getElem_cons_succ]
     | [], [] => simp_all only [List.nodup_nil, ne_eq, not_true_eq_false]
 
 lemma Assignment.bigModify_getIndex {X : Variables} {univ : Universes} [DecidableEq X]
@@ -304,12 +307,12 @@ lemma Assignment.bigModify_mem {X : Variables} {univ : Universes} [DecidableEq X
     ∀ (x : X) (hmem : x ∈ xs),
       β.bigModify xs as x = as[List.idxOf x xs]'(by
         rw [← hlen]
-        exact List.idxOf_lt_length hmem
+        exact List.idxOf_lt_length_of_mem hmem
       ) := by
   intro y hmem
   have hindex := List.nodup_index_unique hmem huniq
   rcases hindex with ⟨i, hinbounds, heq, hindexOf, hiuniq⟩
-  have h : List.idxOf xs[i] xs = i := by exact List.idxOf_getElem huniq i hinbounds
+  have h : List.idxOf xs[i] xs = i := huniq.idxOf_getElem i hinbounds
   simp only [← heq, h]
   exact bigModify_single_index β xs huniq as n hn hnempty hlen i hinbounds
 
@@ -319,7 +322,7 @@ def Assignment.modFn {X : Variables} {univ : Universes} [DecidableEq X]
     (β : Assignment X univ) (xs : List X) (as : List univ) (hlen : xs.length = as.length) :
     Assignment X univ :=
   fun x ↦ if hmem : x ∈ xs then by
-    exact as[xs.idxOf x]'(by rw [← hlen]; exact List.idxOf_lt_length hmem)
+    exact as[xs.idxOf x]'(by rw [← hlen]; exact List.idxOf_lt_length_of_mem hmem)
   else β x
 
 @[simp]
@@ -359,9 +362,9 @@ lemma Assignment.modFn_eq_id {X : Variables} {univ : Universes} [DecidableEq X]
   apply List.map_eq_iff.mpr
   intro i
   by_cases hin : i < as.length
-  · simp_all [↓reduceDIte]
-    have h : List.idxOf xs[i] xs = i := by apply List.get_idxOf huniq
-    simp_all only
+  · have hxslen : i < xs.length := by rw [← hlen] at hin; exact hin
+    have h : List.idxOf xs[i] xs = i := huniq.idxOf_getElem i hxslen
+    simp_all [↓reduceDIte]
   · have hasnone : as[i]? = none := getElem?_neg as i hin
     have hxsnone : xs[i]? = none := by simp_all only [not_lt, getElem?_eq_none_iff]
     rw [hasnone, hxsnone, Option.map]
@@ -429,11 +432,11 @@ lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
     induction' n with n ih generalizing xs as
     · obtain ⟨hxsempty, hasempty⟩ := List.reduce_to_empty hlen (by simp_all only [or_self])
       subst hasempty hxsempty
-      simp_all only [List.length_nil, List.nodup_nil, List.not_mem_nil]
+      simp_all only [List.length_nil, List.not_mem_nil]
     · match xs, as with
       | x :: xs, a :: as =>
         intro β γ
-        simp_all only [Assignment, List.nodup_cons, List.length_cons, Nat.add_right_cancel_iff,
+        simp_all only [Assignment, List.length_cons, Nat.add_right_cancel_iff,
           List.mem_cons, Assignment.bigModify]
         subst hn
         cases hfree with
@@ -446,7 +449,7 @@ lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
               ↓reduceIte]
         | inr h_1 =>
           apply ih <;> simp_all only
-      | [], [] => simp_all only [Assignment, List.nodup_nil, List.length_nil, Nat.add_one_ne_zero]
+      | [], [] => simp_all only [Assignment, List.length_nil, Nat.add_one_ne_zero]
   · intro β γ
     subst hn
     simp_all only [Assignment, eval, List.map_subtype, List.unattach_attach]
@@ -468,7 +471,7 @@ lemma Atom.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
       Atom.eval I (β.bigModify xs as) A = Atom.eval I (γ.bigModify xs as) A) := by
   induction' A with P args
   intro β γ
-  simp_all only [Atom.freeVars, List.coe_toFinset, eval, eq_iff_iff]
+  simp_all only [List.coe_toFinset, eval, eq_iff_iff]
   have hargsareequal : List.map (Term.eval I (β.bigModify xs as)) args =
       List.map (Term.eval I (γ.bigModify xs as)) args := by
     simp_all only [List.map_inj_left]
@@ -552,8 +555,8 @@ lemma Formula.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variab
   · simp_all only [Formula.freeVars, eval]
   · induction' a with p args
     have hatom := Atom.eval_of_many_free I (Atom.pred p args) xs as hlen xs.length rfl
-      (by simp_all only [Formula.freeVars, Atom.freeVars, List.coe_toFinset]) β γ
-    simp_all only [Formula.freeVars, Atom.freeVars, List.coe_toFinset, Atom.eval, eq_iff_iff, eval]
+      (by simp_all only [Formula.freeVars, List.coe_toFinset]) β γ
+    simp_all only [Formula.freeVars, List.coe_toFinset, Atom.eval, eq_iff_iff, eval]
   · rw [eval, eval]
     specialize ih xs as hlen hfree β γ
     exact congrArg Not ih

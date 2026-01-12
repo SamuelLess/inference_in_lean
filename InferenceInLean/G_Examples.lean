@@ -62,7 +62,7 @@ def ex_formula_peano_lt : @Formula ex_sig_peano String :=
 
 lemma ex_proof_lt : @Formula.eval ex_sig_peano String ℕ instDecidableEqString
     ex_interpret_peano ex_assig_peano ex_formula_peano_lt := by
-  simp [ex_formula_peano_lt, ex_sig_peano, Interpretation, Assignment, ex_assig_peano]
+  simp [ex_formula_peano_lt, ex_sig_peano, ex_assig_peano]
 
 
 #eval @Term.eval ex_sig_peano String ℕ ex_interpret_peano ex_assig_peano (Term.var "y")
@@ -121,7 +121,6 @@ theorem setEntails_iff_union_not_unsat' [inst : DecidableEq X]
     specialize hentails I β
     generalize Formula.eval I β G = pro at *
     by_cases halltrue : ∀ G ∈ N, Formula.eval I β G <;> aesop
-  · intro hunsat
-    intro I β hgstrue
+  · intro hunsat I β hgstrue
     specialize hunsat I β
     aesop

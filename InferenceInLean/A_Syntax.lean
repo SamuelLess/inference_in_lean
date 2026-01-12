@@ -1,5 +1,6 @@
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.Finset.Range
+import Mathlib.Tactic.Cases
 
 set_option autoImplicit false
 
@@ -197,9 +198,8 @@ lemma Formula.bigForall_all [DecidableEq X] (xs : List X) (F : Formula sig X) (x
     (bigForall sig X xs (all x F)).freeVars = (all x (bigForall sig X xs F)).freeVars := by
   simp_all only [freeVars]
   induction' xs with y xs ih
-  · simp_all only [List.not_mem_nil, or_false, Set.setOf_eq_eq_singleton,
-      Set.subset_singleton_iff, bigForall, freeVars]
-  · simp_all only [List.mem_cons, bigForall, freeVars]
+  · simp_all only [bigForall, freeVars]
+  · simp_all only [bigForall, freeVars]
     ext x_1 : 1
     simp_all only [Set.mem_diff, Set.mem_singleton_iff]
     apply Iff.intro
@@ -218,7 +218,7 @@ lemma Formula.bigForall_subset_freeVars [DecidableEq X] (xs : List X) (F : Formu
   induction' xs with x xs ih generalizing F
   · simp_all only [List.not_mem_nil, Set.setOf_false, Set.subset_empty_iff, bigForall]
   · rw [bigForall, freeVars]
-    simp_all only [List.mem_cons, bigForall, freeVars]
+    simp_all only [List.mem_cons]
     specialize ih (.all x F)
       (by simp_all only [freeVars, Set.diff_singleton_subset_iff]; exact hmem)
     have hsymm := bigForall_all sig X xs F x
@@ -261,9 +261,8 @@ lemma Term.one_freeVar_of_subterms {sig : Signature} {X : Variables} [DecidableE
         arg.freeVars = {x} ∨ arg.freeVars = {} := by
   intro f args ht honefree arg harg
   induction' args with arg' args' ih generalizing arg t
-  · simp_all only [Term.freeVars.eq_2, Term.func.injEq, or_self, List.not_mem_nil]
-  · simp_all only [Term.freeVars.eq_3, Term.func.injEq, List.cons_ne_self, and_false,
-    IsEmpty.forall_iff, implies_true, List.mem_cons]
+  · simp_all only [Term.freeVars.eq_2, List.not_mem_nil]
+  · simp_all only [Term.freeVars.eq_3, List.mem_cons]
     by_cases h : Term.freeVars sig X arg = {x}
     · left
       exact h
@@ -378,7 +377,7 @@ lemma Atom.freeVars_sub_freeVarsList [DecidableEq X] (a : Atom sig X) :
         apply Or.inl
         apply hfree_subset
         simp_all only
-      · simp_all only [List.coe_toFinset, List.append_eq, List.mem_dedup, List.mem_append,
+      · simp_all only [List.append_eq, List.mem_dedup, List.mem_append,
           Set.mem_setOf_eq]
         apply Or.inr
         apply ih
@@ -418,8 +417,7 @@ lemma Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
     match lit with
     | .pos a =>
       simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
-      intro x
-      intro a_1
+      intro x a_1
       simp_all only [Set.mem_setOf_eq, Set.mem_union]
       cases a_1 with
       | inl h =>
@@ -427,15 +425,14 @@ lemma Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
         have hfree := Atom.freeVars_sub_freeVarsList sig X a
         simp_all only [List.coe_toFinset]
         apply hfree
-        simp_all only [Set.mem_setOf_eq]
+        simp_all only
       | inr h_1 =>
         apply Or.inr
         apply ih
-        simp_all only [Set.mem_setOf_eq]
+        simp_all only
     | .neg a =>
       simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
-      intro x
-      intro a_1
+      intro x a_1
       simp_all only [Set.mem_setOf_eq, Set.mem_union]
       cases a_1 with
       | inl h =>
@@ -443,11 +440,11 @@ lemma Clause.freeVars_sub_freeVarsList [DecidableEq X] (C : Clause sig X) :
         have hfree := Atom.freeVars_sub_freeVarsList sig X a
         simp_all only [List.coe_toFinset]
         apply hfree
-        simp_all only [Set.mem_setOf_eq]
+        simp_all only
       | inr h_1 =>
         apply Or.inr
         apply ih
-        simp_all only [Set.mem_setOf_eq]
+        simp_all only
 
 lemma Clause.freeVarsList_sub_freeVars [DecidableEq X] (C : Clause sig X) :
     ↑(C.freeVarsList).toFinset ⊆ (C.toFormula).freeVars := by
@@ -458,8 +455,7 @@ lemma Clause.freeVarsList_sub_freeVars [DecidableEq X] (C : Clause sig X) :
     match lit with
     | .pos a =>
       simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
-      intro x
-      intro a_1
+      intro x a_1
       simp_all only [Set.mem_setOf_eq, Set.mem_union]
       cases a_1 with
       | inl h =>
@@ -474,8 +470,7 @@ lemma Clause.freeVarsList_sub_freeVars [DecidableEq X] (C : Clause sig X) :
         simp_all only [Set.mem_setOf_eq]
     | .neg a =>
       simp_all only [freeVarsList, List.mem_dedup, List.mem_append, toFormula, Formula.freeVars]
-      intro x
-      intro a_1
+      intro x a_1
       simp_all only [Set.mem_setOf_eq, Set.mem_union]
       cases a_1 with
       | inl h =>
@@ -509,12 +504,12 @@ lemma Clause.consClosed [DecidableEq X] (L : Literal sig X) (C : Clause sig X) :
   intro h
   simp_all only [toClosedFormula]
   induction' L with a a
-  simp_all only [freeVarsList, List.append_nil, toFormula]
+  simp_all only [freeVarsList, toFormula]
   have horsubset := Formula.bigForall_subset_freeVars sig X
     (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
     ((Formula.atom a).or (toFormula sig X C))
   swap
-  simp_all only [freeVarsList, List.append_nil, toFormula]
+  simp_all only [freeVarsList, toFormula]
   have horsubset := Formula.bigForall_subset_freeVars sig X
     (Atom.freeVarsList sig X a ++ freeVarsList sig X C).dedup
     ((Formula.atom a).neg.or (toFormula sig X C))
@@ -617,13 +612,16 @@ lemma Substitution.id_of_domain_empty {sig : Signature} {X : Variables} [BEq X]
     σ.domain = ∅ → t.substitute σ = t := by
   intro hdomempty
   induction' t using Term.induction with x args ih f
-  · have hxnindom : x ∉ σ.domain := by
-      simp_all only [domain, ne_eq, Set.mem_empty_iff_false, not_false_eq_true]
-    simp_all
-    by_cases h : σ x = Term.var x
-    · exact h
-    · exact False.elim (Set.eq_empty_iff_forall_not_mem.mp hdomempty x h)
-  · induction args with
+  case base =>
+    simp only [Term.substitute]
+    have hxnindom : x ∉ σ.domain := by
+      rw [hdomempty]
+      simp
+    by_contra h
+    have : x ∈ σ.domain := by simp only [Substitution.domain, Set.mem_setOf_eq]; exact h
+    simp only [hxnindom this]
+  case step =>
+    induction args with
     | nil => simp only [Term.substitute, List.attach_nil, List.map_nil]
     | cons head tail ihargs => aesop
 
@@ -673,7 +671,7 @@ lemma Substitution.ne_subst_of_mem_dom_free {sig : Signature} {X : Variables} [B
       obtain ⟨hheqhsub, hteqsubt⟩ := teqtsub
       by_cases hxinhead : x ∈ head.freeVars
       · exact hxinheadimp hxinhead hheqhsub
-      · simp [List.mem_cons, List.cons_inj_right] at hxinfree
+      · simp at hxinfree
         have hxintail : x ∈ (Term.func f tail).freeVars := or_iff_not_imp_left.mp hxinfree hxinhead
         have htaileqsubtail := hxintailimp hxintail
         simp only [Term.substitute, List.map_subtype, List.unattach_attach, Term.func.injEq,
@@ -697,22 +695,18 @@ theorem idempotent_iff_inter_empty {sig : Signature} {X : Variables} [BEq X] [BE
     · exact fun a ↦ False.elim a
   -- Reverse direction: If the domain and codomain are disjoint, then σ is idempotent.
   · intro h_inter_empty
-    have h_disjoint_doms : Disjoint σ.domain σ.codomain := by
-      exact Set.disjoint_iff_inter_eq_empty.mpr h_inter_empty
-    have h_nindom_of_incodom := Set.disjoint_left.mp (Disjoint.symm h_disjoint_doms)
-    rw [Substitution.domain, Substitution.codomain, Set.inter_def] at h_inter_empty
-    simp only [Substitution.domain, ne_eq, Substitution.codomain, Set.mem_setOf_eq, Idempotent,
-      Substitution] at h_inter_empty
-    rw [Set.empty_def] at h_inter_empty
-    simp only [Set.setOf_false, Set.eq_empty_iff_forall_not_mem, Set.mem_setOf_eq, not_and,
-      not_exists] at h_inter_empty
     funext x
-    specialize h_inter_empty x
     by_cases hid : σ x = Term.var x
-    · simp_all only [not_true_eq_false, IsEmpty.forall_iff, Substitution.compose, Term.substitute]
-    · specialize (h_inter_empty hid) x
-      have hxdom : x ∈ σ.domain := by aesop
-      have hxninfree := h_inter_empty hxdom
+    · simp only [Substitution.compose, Term.substitute, hid]
+    · have hxdom : x ∈ σ.domain := by
+        simp only [Substitution.domain, Set.mem_setOf_eq]; exact hid
+      have free_not_in_dom : ∀ y ∈ (σ x).freeVars, y ∉ σ.domain := by
+        intro y hy hy_dom
+        have hy_in_codom : y ∈ σ.codomain := by
+          simp only [Substitution.codomain, Set.mem_setOf_eq]
+          exact ⟨x, hxdom, hy⟩
+        have hy_in_inter : y ∈ σ.domain ∩ σ.codomain := ⟨hy_dom, hy_in_codom⟩
+        rw [h_inter_empty] at hy_in_inter
+        exact hy_in_inter
       rw [Substitution.compose]
-      refine Substitution.id_of_free_not_in_domain σ (σ x) ?_
-      aesop
+      exact Substitution.id_of_free_not_in_domain σ (σ x) free_not_in_dom

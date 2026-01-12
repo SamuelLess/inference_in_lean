@@ -118,22 +118,6 @@ theorem ex_4_2a : ∃ I : Interpretation sig42 (Fin 2), ∃ β : Assignment Stri
   use (fun _ => 0)
   simp [I, F₁, F₂, F₃]
 
-  -- Prove F₁: ∀x (x + 0 ≈ x)
-  have h₁ : ∀ (x : Fin 2), (x + 0) % 2 = x := by aesop
-
-  -- Prove F₂: ∀x∀y (x + s(y) ≈ s(x + y))
-  have h₂ : ∀ (x y : Fin 2), (x + ((y + 1) % 2)) % 2 = ((x + y) % 2 + 1) % 2 := by
-    aesop (add norm Fin.add_def)
-
-  -- Prove F₃: ∀x∀y (x + y ≈ y + x)
-  have h₃ : ∀ (x y : Fin 2), (x + y) % 2 = (y + x) % 2 := by
-    intro x y
-    simp_all only [Fin.isValue, Fin.add_zero, I, Fin.add_def]
-    rw [Nat.add_comm]
-
-  simp_all only [Fin.add_zero, I]
-  simp_all only [Fin.isValue, Nat.add_mod_mod, implies_true, true_and, I]
-
 
 /- Part (b): Model of F₁, F₂, F₄ -/
 theorem ex_4_2b : ∃ I : Interpretation sig42 (Fin 2), ∃ β : Assignment String (Fin 2),
@@ -153,12 +137,6 @@ theorem ex_4_2b : ∃ I : Interpretation sig42 (Fin 2), ∃ β : Assignment Stri
   use I
   use (fun _ => 0)
   simp [I, F₁, F₂, F₄]
-
-  apply And.intro
-  · aesop
-  · use 0
-    use 1
-    exact Fin.zero_ne_one
 
 end Task2
 

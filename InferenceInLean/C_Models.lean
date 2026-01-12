@@ -117,7 +117,7 @@ theorem ClauseSatisfiable_imp_Satisfiable [inst : DecidableEq X]
       cases mem_head
       next _h_is_head =>
         constructor
-        simp_all only [List.cons.injEq, true_and, Atom.eval]
+        simp_all only [Atom.eval]
         exact hsatby
       next h_in_tail =>
         apply Or.inr
@@ -285,7 +285,7 @@ lemma three_three_seven [DecidableEq X] (n : ℕ) (F : Formula sig X) (I : Inter
     apply hlemma as (Eq.symm (List.length_map γ))
   · intro hvalid β
     induction' xs with x xs ih generalizing β n
-    · simp_all only [ValidIn, Valid, Assignment, List.nodup_nil, Formula.bigForall]
+    · simp_all only [ValidIn, Assignment, List.nodup_nil, Formula.bigForall]
     · rw [EntailsInterpret, Formula.bigForall, Formula.eval]
       intro a
       exact ih (n - 1) (List.Nodup.of_cons huniq) (Nat.eq_sub_of_add_eq hn) (β.modify x a)

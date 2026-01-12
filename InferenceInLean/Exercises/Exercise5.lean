@@ -76,7 +76,7 @@ theorem task5_1_2 : ¬∃ (univ : Universes) (I : Interpretation sig5_1 univ),
     simp [P,b] at h_P_b
     exact h_P_b
   have h_not_P_ffbval : ¬I.predicates .P [bval] := by
-    simp [Formula.eval, P, f, b, bval] at h_not_P_ffb
+    simp [Formula.eval, P, f, b] at h_not_P_ffb
     rw [h_ffb] at h_not_P_ffb
     exact h_not_P_ffb
   contradiction
@@ -94,8 +94,8 @@ theorem task5_1_3 : ∃ preds, ∀ β, EntailsInterpret (HerbrandInterpretation 
   intro β
   simp [F₁, EntailsInterpret]
   apply And.intro
-  · simp [HerbrandInterpretation, Atom.eval, Term.eval, preds, P, b]
-  · simp [HerbrandInterpretation, Atom.eval, preds, P, f, b]
+  · simp [Atom.eval, Term.eval, preds, P, b]
+  · simp [Atom.eval, preds, P, f, b]
 
 -- (4) P(b) ∧ ∀x ¬P(x) has no Herbrand model.
 def F₄ : Formula sig5_1 String := .and (P [b]) (.all "x" (.neg (P [.var "x"])))
@@ -111,8 +111,7 @@ theorem task5_1_4 : ¬∃ preds, ∀ β, EntailsInterpret (HerbrandInterpretatio
   obtain ⟨_, h_forall⟩ := h₀
   let β₁ : Assignment String (GroundTerm sig5_1) := β₀.modify "x" b'
   have hNotPb : ¬preds .P [b'] := by
-    simp [Formula.eval, HerbrandInterpretation, Atom.eval, Term.eval,
-          Assignment.modify, Formula.all, β₁] at h_forall
+    simp [Formula.eval, HerbrandInterpretation] at h_forall
     specialize h_forall b'
     simp [P] at h_forall
     exact h_forall
@@ -153,8 +152,7 @@ theorem task5_1_6 : ∃! ps,
     · simp [ArityP]
     · intro β
       simp [F₆, P]
-  · intro preds'
-    intro ⟨h_arity, h_entails⟩
+  · intro preds' ⟨h_arity, h_entails⟩
     ext p args
     cases p
     -- Let's prove that P must be true for all args for preds'

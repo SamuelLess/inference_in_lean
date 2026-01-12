@@ -79,7 +79,7 @@ theorem generalSoundness_of_soundness [inst : DecidableEq X]
         aesop
       · have hvalid := proof.is_valid (i + 1) hlen
         rcases hvalid with hassump | hconseq
-        · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
+        · simp_all only [Assignment, EntailsInterpret]
         · rcases hconseq with ⟨inference, ⟨hin, ⟨hlast, hcond, hprev⟩⟩⟩
           rw [hlast]
           have hinfsound := hsound inference hin
@@ -106,6 +106,6 @@ theorem generalSoundness_of_soundness [inst : DecidableEq X]
     rw [proof.last_clause_conclusion, hconclusion]
   rw [hfislast] at hfconclusion
   rcases hfconclusion with hl | hr
-  · simp_all only [Soundness, SetEntails, Assignment, EntailsInterpret]
+  · simp_all only [EntailsInterpret]
   · subst hfislast hassumption
     simp_all only [Clause.eq_1, EntailsInterpret, List.getElem_mem]

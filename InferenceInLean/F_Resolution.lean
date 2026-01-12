@@ -69,8 +69,8 @@ theorem groundResolution_soundness {A : Atom sig Empty} {C D : Clause sig Empty}
     @Soundness _ _ univ _ (GroundResolution sig A C D):= by
   intro rule h_rule_ground hcond I h_premise_true
   simp [EntailsInterpret]
-  simp_all only [GroundResolution, GroundResolutionRule, Clause, List.append_eq,
-    GroundFactorizationRule, EntailsInterpret]
+  simp_all only [GroundResolution, GroundResolutionRule, Clause,
+    GroundFactorizationRule]
   rw [List.mem_cons, List.mem_singleton] at h_rule_ground
   cases h_rule_ground
   -- proof of resolution rule
@@ -113,7 +113,7 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
   let left := Clause.toClosedFormula sig X (.pos B :: D)
   let right := Clause.toClosedFormula sig X (.neg A :: C)
   intro I β h_entails
-  simp [Formula.and] at h_entails
+  simp at h_entails
   obtain ⟨hleft, hright⟩ := h_entails
   have hleftentails : EntailsInterpret I β left := by exact hleft
   have hrightentails : EntailsInterpret I β right := by exact hright
@@ -159,7 +159,7 @@ theorem generalResolutionRuleSound [DecidableEq X] (A B : Atom sig X) (C D : Cla
     have heval_leftinnersub := hleftinnersub β'
     simp [List.map_cons] at heval_leftinnersub
     rcases heval_leftinnersub with hBσ | hDσ
-    · simp_all only [Atom.substitute, Atom.pred.injEq, Atom.eval, List.map_map, not_true_eq_false]
+    · simp_all only [Atom.substitute, Atom.eval, List.map_map, not_true_eq_false]
     · exact hDσ
   have hCσ_of_Aσ : ∀ β : Assignment X univ, Atom.eval I β (A.substitute σ) →
       Formula.eval I β (C.substitute σ) := by
@@ -226,9 +226,8 @@ def GeneralFactorizationRule [inst : DecidableEq X] (A B : Atom sig X) (C : Clau
 theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C D : Clause sig X}
     {σ : Substitution sig X} :
     @Soundness _ _ univ _ ([GeneralResolutionRule A B C D σ, GeneralFactorizationRule A B C σ]):= by
-  intro rule h_rule_general hcond I
-  intro h_premise_true
-  simp_all only [GeneralResolutionRule, Clause, List.append_eq, GeneralFactorizationRule]
+  intro rule h_rule_general hcond I h_premise_true
+  simp_all only [GeneralResolutionRule, Clause, GeneralFactorizationRule]
   rw [List.mem_cons, List.mem_singleton] at h_rule_general
   cases h_rule_general
   -- proof of resolution rule
@@ -247,7 +246,7 @@ theorem generalResolution_soundness [inst : DecidableEq X] {A B : Atom sig X} {C
   -- proof of factorization rule
   next h_fact_rule =>
     subst h_fact_rule
-    simp_all only [forall_eq, Set.mem_insert_iff, Set.mem_singleton_iff, forall_eq_or_imp]
+    simp_all only [forall_eq, Set.mem_singleton_iff]
     have closed := validclosed_iff_valid.mp h_premise_true
     have conclosed := @generalFactorizationRuleSound sig X univ _ A B C σ hcond I
     apply validclosed_iff_valid.mpr
