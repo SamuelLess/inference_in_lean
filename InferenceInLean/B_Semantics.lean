@@ -12,7 +12,7 @@ that the evaluation of closed formulas does not depend on assignments. -/
 
 namespace Semantics
 
-def Universes := Type
+abbrev Universes := Type
 
 variable (sig : Signature) (X : Variables) (univ : Universes)
 
@@ -30,7 +30,7 @@ def HerbrandInterpretation (sig : Signature) (preds : sig.preds -> List (GroundT
 
 /-- Assignments are the semantic counterparts of substitution. -/
 @[simp]
-def Assignment := X → univ
+abbrev Assignment := X → univ
 
 /-- Similarly to substitions, we can modify an assignment β by stating that it should assign some
 variable x to some element a instead. In the lecture notes, this is written as β[x ↦ a]. -/
@@ -51,7 +51,7 @@ lemma Assignment.modify_rfl [DecidableEq X]
 
 /-- x ≠ y → β[x ↦ a, y ↦ b] = β[y ↦ b, x ↦ a] -/
 @[simp]
-def Assignment.modify_comm {X : Variables} {univ : Universes} [DecidableEq X]
+theorem Assignment.modify_comm {X : Variables} {univ : Universes} [DecidableEq X]
     {β : Assignment X univ} (x y : X) (a b : univ) :
     x ≠ y → (β.modify x a).modify y b = (β.modify y b).modify x a := by
   aesop
@@ -249,8 +249,7 @@ lemma Assignment.bigModify_single_index {X : Variables} {univ : Universes} [Deci
   · by_cases hnzero : n = 0
     · have h : xs = [] := by rw [hnzero] at hn; exact List.length_eq_zero_iff.mp (id (Eq.symm hn))
       exact False.elim (hnempty h)
-    · simp at hnzero
-      have hi : i = 0 := by omega
+    · have hi : i = 0 := by omega
       subst i
       match xs, as with
       | x :: xs, a :: as =>
@@ -428,7 +427,7 @@ lemma Term.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variables
       Term.eval I (β.bigModify xs as) T = Term.eval I (γ.bigModify xs as) T) := by
   simp_all only [List.coe_toFinset]
   induction' T using Term.induction with y args ih f
-  · simp_all only [Term.freeVars.eq_1, Set.singleton_subset_iff, Set.mem_setOf_eq, eval]
+  · simp_all only [Term.freeVars.eq_1, Set.singleton_subset_iff, Set.mem_ofPred_eq, eval]
     induction' n with n ih generalizing xs as
     · obtain ⟨hxsempty, hasempty⟩ := List.reduce_to_empty hlen (by simp_all only [or_self])
       subst hasempty hxsempty
@@ -509,24 +508,24 @@ lemma Formula.inductionStep_quantifier {univ : Universes} {sig : Signature} {X :
   eval I ((γ.bigModify xs as).modify y a) F := by
     by_cases hxinxs : y ∈ xs
     · have hsub : F.freeVars ⊆ ↑xs.toFinset := by
-        simp_all only [List.coe_toFinset, Set.diff_singleton_subset_iff, Set.mem_setOf_eq,
+        simp_all only [List.coe_toFinset, Set.sdiff_singleton_subset_iff, Set.mem_ofPred_eq,
         Set.insert_eq_of_mem]
       have hsubappend : ↑xs.toFinset ⊆ ↑(xs ++ [y]).toFinset := by
         rw [List.toFinset, List.toFinset]
         intro x hxmem
-        simp_all only [List.coe_toFinset, Set.diff_singleton_subset_iff, Set.mem_setOf_eq,
+        simp_all only [List.coe_toFinset, Set.sdiff_singleton_subset_iff, Set.mem_ofPred_eq,
           Set.insert_eq_of_mem, List.toFinset_coe, List.mem_toFinset, List.mem_append,
           List.mem_singleton, true_or]
       have hlenappend : (xs ++ [y]).length = (as ++ [a]).length := by
-        simp_all only [List.coe_toFinset, Set.diff_singleton_subset_iff, Set.mem_setOf_eq,
+        simp_all only [List.coe_toFinset, Set.sdiff_singleton_subset_iff, Set.mem_ofPred_eq,
           Set.insert_eq_of_mem, List.length_append, List.length_singleton]
       specialize ih (xs ++ [y]) (as ++ [a]) hlenappend
         (by exact fun ⦃a⦄ a_1 ↦ hsubappend (hsub a_1)) β γ
-      simp_all only [List.coe_toFinset, Set.diff_singleton_subset_iff, Set.mem_setOf_eq,
+      simp_all only [List.coe_toFinset, Set.sdiff_singleton_subset_iff, Set.mem_ofPred_eq,
         Set.insert_eq_of_mem, Assignment.bigModify_append, true_iff]
     · by_cases hfin : y ∈ F.freeVars
       · have hfreevars : F.freeVars ⊆ ↑(y :: xs).toFinset := by
-          simp_all only [List.coe_toFinset, Set.diff_singleton_subset_iff, List.toFinset_cons,
+          simp_all only [List.coe_toFinset, Set.sdiff_singleton_subset_iff, List.toFinset_cons,
             Finset.coe_insert]
         specialize ih (y :: xs) (a :: as)
           (Nat.succ_inj.mpr hlen) hfreevars β γ
@@ -535,7 +534,7 @@ lemma Formula.inductionStep_quantifier {univ : Universes} {sig : Signature} {X :
         rw [← ih]
         rw [← Assignment.bigModify_modify β xs as y a hxinxs xs.length rfl hlen]
         exact heval
-      · have hfreevars : F.freeVars \ {y} = F.freeVars := by exact Set.diff_singleton_eq_self hfin
+      · have hfreevars : F.freeVars \ {y} = F.freeVars := by exact Set.sdiff_singleton_eq_self hfin
         rw [hfreevars] at hfree
         specialize ih xs as hlen hfree (β.modify y a) (γ.modify y a)
         rw [Assignment.bigModify_modify γ xs as y a hxinxs xs.length rfl hlen]
@@ -579,7 +578,7 @@ lemma Formula.eval_of_many_free {univ : Universes} {sig : Signature} {X : Variab
         specialize heval a
         exact inductionStep_quantifier I y F xs as β γ ih hlen hfree a heval
       · intro heval a
-        simp_all only [List.coe_toFinset, Set.diff_singleton_subset_iff]
+        simp_all only [List.coe_toFinset, Set.sdiff_singleton_subset_iff]
   · simp_all only [Assignment, eq_iff_iff, Formula.freeVars, eval]
     wlog himp : ∃ (a : univ), eval I ((β.bigModify xs as).modify y a) F
     · apply Iff.intro
