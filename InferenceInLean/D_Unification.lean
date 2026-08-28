@@ -14,11 +14,11 @@ open Models
 namespace Unification
 
 @[simp]
-def Equality (sig : Signature) (X : Variables) :=
+abbrev Equality (sig : Signature) (X : Variables) :=
   Atom sig X × Atom sig X
 
 @[simp]
-def EqualityProblem (sig : Signature) (X : Variables) :=
+abbrev EqualityProblem (sig : Signature) (X : Variables) :=
   List (Equality sig X)
 
 instance {sig : Signature} {X : Variables} : Membership (Equality sig X) (EqualityProblem sig X) :=
